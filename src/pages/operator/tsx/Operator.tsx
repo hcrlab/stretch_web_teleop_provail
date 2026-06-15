@@ -16,6 +16,7 @@ import {
     underMapFunctionProvider,
     underVideoFunctionProvider,
     homeTheRobotFunctionProvider,
+    keyboardFunctionProvider,
     hasBetaTeleopKit,
     stretchTool,
 } from ".";
@@ -41,6 +42,72 @@ import { Alert } from "./basic_components/Alert";
 import "operator/css/Operator.css";
 import { TextToSpeech } from "./layout_components/TextToSpeech";
 import { HomeTheRobot } from "./layout_components/HomeTheRobot";
+
+const KEYBOARD_SHORTCUTS: Record<string, ButtonPadButton> = {
+    KeyW: ButtonPadButton.BaseForward,
+    KeyS: ButtonPadButton.BaseReverse,
+    KeyA: ButtonPadButton.BaseRotateLeft,
+    KeyD: ButtonPadButton.BaseRotateRight,
+
+    KeyI: ButtonPadButton.ArmLift,
+    KeyK: ButtonPadButton.ArmLower,
+    KeyL: ButtonPadButton.ArmExtend,
+    KeyJ: ButtonPadButton.ArmRetract,
+
+    KeyT: ButtonPadButton.GripperOpen,
+    KeyG: ButtonPadButton.GripperClose,
+
+    KeyU: ButtonPadButton.WristPitchUp,
+    KeyO: ButtonPadButton.WristPitchDown,
+    KeyY: ButtonPadButton.WristRotateOut,
+    KeyH: ButtonPadButton.WristRotateIn,
+    KeyR: ButtonPadButton.WristRollLeft,
+    KeyF: ButtonPadButton.WristRollRight,
+
+    ArrowUp: ButtonPadButton.CameraTiltUp,
+    ArrowDown: ButtonPadButton.CameraTiltDown,
+    ArrowLeft: ButtonPadButton.CameraPanLeft,
+    ArrowRight: ButtonPadButton.CameraPanRight,
+};
+
+const NOT_HOMED_DISABLED_SHORTCUTS = new Set<ButtonPadButton>([
+    ButtonPadButton.ArmLower,
+    ButtonPadButton.ArmLift,
+    ButtonPadButton.ArmExtend,
+    ButtonPadButton.ArmRetract,
+    ButtonPadButton.WristRotateIn,
+    ButtonPadButton.WristRotateOut,
+    ButtonPadButton.GripperOpen,
+    ButtonPadButton.GripperClose,
+]);
+
+function shouldIgnoreShortcut(event: KeyboardEvent): boolean {
+    if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
+        return true;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (!target) return false;
+
+    return (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable
+    );
+}
+
+function cloneComponentDefinition<T extends ComponentDefinition>(definition: T): T {
+    const maybeParent = definition as T & { children?: ComponentDefinition[] };
+    const clone = {
+        ...definition,
+        children: maybeParent.children?.map((child) =>
+            cloneComponentDefinition(child),
+        ),
+    };
+
+    return clone as T;
+}
 
 /** Operator interface webpage */
 export const Operator = (props: {
@@ -74,6 +141,30 @@ export const Operator = (props: {
     homeTheRobotFunctionProvider.setIsHomedCallback(
         showHomeTheRobotGlobalControl
     );
+
+    React.useEffect(() => {
+        if (customizing) return;
+
+        function handleKeyDown(event: KeyboardEvent) {
+            if (shouldIgnoreShortcut(event)) return;
+
+            const button = KEYBOARD_SHORTCUTS[event.code];
+            if (!button) return;
+
+            if (
+                robotNotHomed &&
+                NOT_HOMED_DISABLED_SHORTCUTS.has(button)
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+            keyboardFunctionProvider.provideKeyboardShortcut(button)();
+        }
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [customizing, robotNotHomed]);
 
     const layout = React.useRef<LayoutDefinition>(props.layout);
 
@@ -217,12 +308,17 @@ export const Operator = (props: {
             throw Error("Active definition undefined on drop event");
         let newPath: string = path;
         if (!selectedPath) {
-            // New element not already in the layout
-            newPath = addToLayout(selectedDefinition, path, layout.current);
+            // New element from the sidebar. Clone it so repeated adds do not
+            // share the same mutable definition object.
+            const definitionToAdd =
+                cloneComponentDefinition(selectedDefinition);
+            addToLayout(definitionToAdd, path, layout.current);
+            setSelectedDef(undefined);
+            setSelectedPath(undefined);
         } else {
             newPath = moveInLayout(selectedPath, path, layout.current);
+            setSelectedPath(newPath);
         }
-        setSelectedPath(newPath);
         console.log("new active path", newPath);
         updateLayout();
     }

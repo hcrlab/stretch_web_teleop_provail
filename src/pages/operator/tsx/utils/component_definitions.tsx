@@ -102,6 +102,8 @@ export type LayoutGridDefinition = ComponentDefinition & {
  * Definition for a tabs component
  */
 export type PanelDefinition = ComponentDefinition & {
+    /** Relative size of this panel inside its parent flex layout */
+    flexGrow?: number;
     /** List of definitions for individual tabs */
     children: TabDefinition[];
 };

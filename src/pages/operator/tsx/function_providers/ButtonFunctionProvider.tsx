@@ -192,6 +192,64 @@ export class ButtonFunctionProvider extends FunctionProvider {
     }
 
     /**
+     * Executes the step-action behavior for a button exactly once, independent
+     * of the current global action mode.
+     *
+     * This is useful for interaction surfaces such as keyboard shortcuts, where
+     * pressing a shortcut should not start a press-and-hold or click-click
+     * continuous action.
+     *
+     * @param buttonPadFunction the {@link ButtonPadButton} to execute once
+     */
+    public pressButtonOnce(buttonPadFunction: ButtonPadButton) {
+        const jointName: ValidJoints =
+            getJointNameFromButtonFunction(buttonPadFunction);
+        const multiplier: number = negativeButtonPadFunctions.has(
+            buttonPadFunction,
+        )
+            ? -1
+            : 1;
+        const velocity =
+            multiplier *
+            JOINT_VELOCITIES[jointName]! *
+            FunctionProvider.velocityScale;
+        const increment =
+            multiplier *
+            JOINT_INCREMENTS[jointName]! *
+            FunctionProvider.velocityScale;
+
+        switch (buttonPadFunction) {
+            case ButtonPadButton.BaseForward:
+            case ButtonPadButton.BaseReverse:
+                this.incrementalBaseDrive(velocity, 0.0);
+                break;
+            case ButtonPadButton.BaseRotateLeft:
+            case ButtonPadButton.BaseRotateRight:
+                this.incrementalBaseDrive(0.0, velocity);
+                break;
+            case ButtonPadButton.CameraTiltUp:
+            case ButtonPadButton.CameraTiltDown:
+            case ButtonPadButton.CameraPanLeft:
+            case ButtonPadButton.CameraPanRight:
+                this.incrementalJointMovement(jointName, increment);
+                FunctionProvider.remoteRobot?.setToggle(
+                    "setFollowGripper",
+                    false,
+                );
+                break;
+            default:
+                this.incrementalJointMovement(jointName, increment);
+                break;
+        }
+
+        this.setButtonActiveState(buttonPadFunction);
+        setTimeout(
+            () => this.setButtonInactiveState(buttonPadFunction),
+            1000,
+        );
+    }
+
+    /**
      * Sets a type of a button pad button to active.
      *
      * @param buttonType the button pad button to set active

@@ -43,6 +43,8 @@
     "scripts": {
         "firebase": "webpack --mode development --progress --env storage='firebase'",
         "localstorage": "webpack --mode development --progress --env storage='localstorage'",
+        "mock:build": "webpack --mode development --progress --env storage='localstorage'",
+        "mock:server": "node scripts/mock_operator_server.js",
         "styleguide": "styleguidist server",
         "build": "webpack --mode production --progress --env storage='firebase'"
     },
@@ -74,6 +76,7 @@
         "@eslint/js": "^9.25.1",
         "@types/node": "^20.6.0",
         "@types/three": "^0.157.0",
+        "ajv": "^8.20.0",
         "babel-loader": "^9.1.2",
         "babel-polyfill": "^6.26.0",
         "eslint": "^9.25.1",

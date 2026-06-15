@@ -32,6 +32,9 @@ export const Panel = (props: CustomizableComponentProps) => {
     let [activeTab, setActiveTab] = React.useState(0);
     // If should show the popup to name a new tab
     const [showTabModal, setShowTabModal] = React.useState(false);
+    // Incremented when the panel size is changed to force a re-render
+    const [, forceResizeRender] = React.useState(0);
+
     const definition = props.definition as PanelDefinition;
     const countChildren = definition.children.length;
 
@@ -54,10 +57,11 @@ export const Panel = (props: CustomizableComponentProps) => {
     }
 
     // Should take up screen size proportional to number of children
-    const flex =
+    const defaultFlex =
         activeTabDef.label === "Safety"
             ? 1
             : Math.max(activeTabDef.children.length + 1, 1);
+    const panelFlex = definition.flexGrow ?? defaultFlex;
 
     /** Props for rendering the children elements inside the active tab */
     const componentListProps: ComponentListProps = {
@@ -169,6 +173,48 @@ export const Panel = (props: CustomizableComponentProps) => {
         );
     }
 
+    function setPanelFlex(nextFlex: number) {
+        definition.flexGrow = Math.max(0.5, Math.min(8, nextFlex));
+        forceResizeRender((value) => value + 1);
+    }
+
+    function handleResizePointerDown(
+        event: React.PointerEvent<HTMLButtonElement>,
+    ) {
+        if (!props.sharedState.customizing) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const startY = event.clientY;
+        const startFlex = definition.flexGrow ?? panelFlex;
+
+        function handlePointerMove(moveEvent: PointerEvent) {
+            const delta = moveEvent.clientY - startY;
+            setPanelFlex(startFlex + delta / 80);
+        }
+
+        function handlePointerUp() {
+            window.removeEventListener("pointermove", handlePointerMove);
+            window.removeEventListener("pointerup", handlePointerUp);
+        }
+
+        window.addEventListener("pointermove", handlePointerMove);
+        window.addEventListener("pointerup", handlePointerUp);
+    }
+
+    function handleResizeKeyDown(
+        event: React.KeyboardEvent<HTMLButtonElement>,
+    ) {
+        if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setPanelFlex(panelFlex - 0.25);
+        } else if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setPanelFlex(panelFlex + 0.25);
+        }
+    }
+
     const thisSelected = childTabSelected === -1;
 
     return (
@@ -177,7 +223,7 @@ export const Panel = (props: CustomizableComponentProps) => {
                 customizing: props.sharedState.customizing,
                 selected: thisSelected,
             })}
-            style={{ flex: `${flex} ${flex} 0` }}
+            style={{ flex: `${panelFlex} ${panelFlex} 0` }}
         >
             <div className="tabs-header">
                 {definition.children.map(mapTabLabels)}
@@ -206,6 +252,16 @@ export const Panel = (props: CustomizableComponentProps) => {
                 setShow={setShowTabModal}
                 addTab={addTab}
             />
+            {props.sharedState.customizing ? (
+                <button
+                    type="button"
+                    className="panel-resize-handle"
+                    aria-label="Resize panel"
+                    tabIndex={0}
+                    onPointerDown={handleResizePointerDown}
+                    onKeyDown={handleResizeKeyDown}
+                />
+            ) : undefined}
         </div>
     );
 };
