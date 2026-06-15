@@ -174,14 +174,16 @@ export const Panel = (props: CustomizableComponentProps) => {
     }
 
     function setPanelFlex(nextFlex: number) {
-    definition.flexGrow = Math.max(0.5, Math.min(8, nextFlex));
-    forceResizeRender((value) => value + 1);
+        definition.flexGrow = Math.max(0.5, Math.min(8, nextFlex));
+        forceResizeRender((value) => value + 1);
+        props.sharedState.onLayoutChange();
     }
     function resetPanelFlex(event: React.MouseEvent<HTMLButtonElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-    delete definition.flexGrow;
-    forceResizeRender((value) => value + 1);
+        event.preventDefault();
+        event.stopPropagation();
+        delete definition.flexGrow;
+        forceResizeRender((value) => value + 1);
+        props.sharedState.onLayoutChange();
     }
 
     function shrinkPanel(event: React.MouseEvent<HTMLButtonElement>) {

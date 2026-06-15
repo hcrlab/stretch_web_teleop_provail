@@ -1,15 +1,17 @@
 import ROSLIB from "roslib";
 import { BASIC_LAYOUT } from "../default_layouts/SIMPLE_LAYOUT";
+import { PROVAIL_LAYOUT } from "../default_layouts/PROVAIL_LAYOUT";
 import { LayoutDefinition } from "operator/tsx/utils/component_definitions";
 import { ArucoMarkersInfo, RobotPose } from "shared/util";
 import { ARUCO_MARKER_INFO } from "../utils/aruco_markers_dict";
 
 /** Type for all the possible names of default layouts. */
-export type DefaultLayoutName = "Basic Layout";
+export type DefaultLayoutName = "Provail Layout" | "Basic Layout";
 
 /** Object with all the default layouts. */
 export const DEFAULT_LAYOUTS: { [key in DefaultLayoutName]: LayoutDefinition } =
     {
+        "Provail Layout": PROVAIL_LAYOUT,
         "Basic Layout": BASIC_LAYOUT,
     };
 

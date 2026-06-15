@@ -81,11 +81,9 @@ const NOT_HOMED_DISABLED_SHORTCUTS = new Set<ButtonPadButton>([
     ButtonPadButton.GripperClose,
 ]);
 
-function shouldIgnoreShortcut(event: KeyboardEvent): boolean {
-    if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
-        return true;
-    }
+const ALT_SHORTCUT_LAYER_KEY = "Digit2";
 
+function isShortcutTextTarget(event: KeyboardEvent): boolean {
     const target = event.target as HTMLElement | null;
     if (!target) return false;
 
@@ -95,6 +93,33 @@ function shouldIgnoreShortcut(event: KeyboardEvent): boolean {
         target.tagName === "SELECT" ||
         target.isContentEditable
     );
+}
+
+function isAltShortcut(event: KeyboardEvent, pressedKeys: Set<string>): boolean {
+    return (
+        event.altKey &&
+        pressedKeys.has(ALT_SHORTCUT_LAYER_KEY) &&
+        event.code !== ALT_SHORTCUT_LAYER_KEY
+    );
+}
+
+function shouldIgnoreShortcut(
+    event: KeyboardEvent,
+    pressedKeys: Set<string>,
+): boolean {
+    if (event.repeat || event.ctrlKey || event.metaKey) {
+        return true;
+    }
+
+    if (isShortcutTextTarget(event)) {
+        return true;
+    }
+
+    if (event.altKey && !isAltShortcut(event, pressedKeys)) {
+        return true;
+    }
+
+    return false;
 }
 
 function cloneComponentDefinition<T extends ComponentDefinition>(definition: T): T {
@@ -145,8 +170,22 @@ export const Operator = (props: {
     React.useEffect(() => {
         if (customizing) return;
 
+        const pressedKeys = new Set<string>();
+        const shortcutListenerOptions = { capture: true };
+
         function handleKeyDown(event: KeyboardEvent) {
-            if (shouldIgnoreShortcut(event)) return;
+            pressedKeys.add(event.code);
+
+            if (
+                event.altKey &&
+                event.code === ALT_SHORTCUT_LAYER_KEY &&
+                !isShortcutTextTarget(event)
+            ) {
+                event.preventDefault();
+                return;
+            }
+
+            if (shouldIgnoreShortcut(event, pressedKeys)) return;
 
             const button = KEYBOARD_SHORTCUTS[event.code];
             if (!button) return;
@@ -162,8 +201,34 @@ export const Operator = (props: {
             keyboardFunctionProvider.provideKeyboardShortcut(button)();
         }
 
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
+        function handleKeyUp(event: KeyboardEvent) {
+            pressedKeys.delete(event.code);
+        }
+
+        function handleBlur() {
+            pressedKeys.clear();
+        }
+
+        window.addEventListener(
+            "keydown",
+            handleKeyDown,
+            shortcutListenerOptions,
+        );
+        window.addEventListener("keyup", handleKeyUp, shortcutListenerOptions);
+        window.addEventListener("blur", handleBlur);
+        return () => {
+            window.removeEventListener(
+                "keydown",
+                handleKeyDown,
+                shortcutListenerOptions,
+            );
+            window.removeEventListener(
+                "keyup",
+                handleKeyUp,
+                shortcutListenerOptions,
+            );
+            window.removeEventListener("blur", handleBlur);
+        };
     }, [customizing, robotNotHomed]);
 
     const layout = React.useRef<LayoutDefinition>(props.layout);
