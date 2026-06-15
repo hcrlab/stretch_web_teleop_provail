@@ -174,8 +174,26 @@ export const Panel = (props: CustomizableComponentProps) => {
     }
 
     function setPanelFlex(nextFlex: number) {
-        definition.flexGrow = Math.max(0.5, Math.min(8, nextFlex));
-        forceResizeRender((value) => value + 1);
+    definition.flexGrow = Math.max(0.5, Math.min(8, nextFlex));
+    forceResizeRender((value) => value + 1);
+    }
+    function resetPanelFlex(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    delete definition.flexGrow;
+    forceResizeRender((value) => value + 1);
+    }
+
+    function shrinkPanel(event: React.MouseEvent<HTMLButtonElement>) {
+        event.preventDefault();
+        event.stopPropagation();
+        setPanelFlex(panelFlex - 0.5);
+    }
+
+    function growPanel(event: React.MouseEvent<HTMLButtonElement>) {
+        event.preventDefault();
+        event.stopPropagation();
+        setPanelFlex(panelFlex + 0.5);
     }
 
     function handleResizePointerDown(
@@ -185,12 +203,20 @@ export const Panel = (props: CustomizableComponentProps) => {
 
         event.preventDefault();
         event.stopPropagation();
+        event.currentTarget.setPointerCapture(event.pointerId);
 
         const startY = event.clientY;
+        const startX = event.clientX;
         const startFlex = definition.flexGrow ?? panelFlex;
+        const parent = event.currentTarget.parentElement?.parentElement;
+        const verticalResize =
+            !parent ||
+            window.getComputedStyle(parent).flexDirection.includes("column");
 
         function handlePointerMove(moveEvent: PointerEvent) {
-            const delta = moveEvent.clientY - startY;
+            const delta = verticalResize
+                ? moveEvent.clientY - startY
+                : moveEvent.clientX - startX;
             setPanelFlex(startFlex + delta / 80);
         }
 
@@ -215,6 +241,39 @@ export const Panel = (props: CustomizableComponentProps) => {
         }
     }
 
+    const resizeControls = props.sharedState.customizing ? (
+        <div
+            className="panel-resize-controls"
+            aria-label="Panel resize controls"
+            onClick={(event) => event.stopPropagation()}
+        >
+            <button
+                type="button"
+                aria-label="Shrink panel"
+                title="Shrink panel"
+                onClick={shrinkPanel}
+            >
+                -
+            </button>
+            <button
+                type="button"
+                aria-label="Reset panel size"
+                title="Reset panel size"
+                onClick={resetPanelFlex}
+            >
+                Reset
+            </button>
+            <button
+                type="button"
+                aria-label="Grow panel"
+                title="Grow panel"
+                onClick={growPanel}
+            >
+                +
+            </button>
+        </div>
+    ) : undefined;
+
     const thisSelected = childTabSelected === -1;
 
     return (
@@ -223,7 +282,7 @@ export const Panel = (props: CustomizableComponentProps) => {
                 customizing: props.sharedState.customizing,
                 selected: thisSelected,
             })}
-            style={{ flex: `${panelFlex} ${panelFlex} 0` }}
+            style={{ flex: `${panelFlex} ${panelFlex} 0px` }}
         >
             <div className="tabs-header">
                 {definition.children.map(mapTabLabels)}
@@ -243,6 +302,7 @@ export const Panel = (props: CustomizableComponentProps) => {
                         </button>
                     ) : undefined
                 }
+                {resizeControls}
             </div>
             <div className="tabs-content" {...selectProp}>
                 <ComponentList {...componentListProps} />
