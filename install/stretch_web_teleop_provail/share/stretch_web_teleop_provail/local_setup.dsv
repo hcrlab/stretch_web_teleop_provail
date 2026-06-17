@@ -1,0 +1,4 @@
+source;share/stretch_web_teleop_provail/environment/ament_prefix_path.sh
+source;share/stretch_web_teleop_provail/environment/library_path.sh
+source;share/stretch_web_teleop_provail/environment/path.sh
+source;share/stretch_web_teleop_provail/environment/pythonpath.sh
