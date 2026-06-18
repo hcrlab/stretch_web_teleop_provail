@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=stretch_web_teleop_provail
+Exec=/home/hello-robot/provail_ws/src/stretch_web_teleop_provail/autostart.sh
+Hidden=false
+X-GNOME-Autostart-enabled=false
