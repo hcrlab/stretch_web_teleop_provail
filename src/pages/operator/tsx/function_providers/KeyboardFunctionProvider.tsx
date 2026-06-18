@@ -61,10 +61,15 @@ export class KeyboardFunctionProvider extends ButtonFunctionProvider {
     private handleKeyDown(event: KeyboardEvent) {
         if (this.isTypingTarget(event.target)) return;
 
+        // Only start driving shortcuts when both Shift and Alt are held.
+        // This avoids accidental activation while typing or using other UI keys.
+        if (!(event.shiftKey && event.altKey)) return;
+
         const key = event.key.toLowerCase();
         const button = BASE_DRIVE_KEY_MAP[key];
         if (!button) return;
 
+        // Prevent default browser behavior for these shortcuts when active
         event.preventDefault();
 
         if (this.keysPressed.has(key)) return; // ignore OS auto-repeat
@@ -86,6 +91,8 @@ export class KeyboardFunctionProvider extends ButtonFunctionProvider {
         const key = event.key.toLowerCase();
         if (!BASE_DRIVE_KEY_MAP[key]) return;
 
+        // Always clear held-key state on keyup for the mapped keys so we don't
+        // leave sticky state if modifiers change while keys are held.
         this.keysPressed.delete(key);
 
         if (this.keysPressed.size === 0 && this.repeatIntervalId) {
