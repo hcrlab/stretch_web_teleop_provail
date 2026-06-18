@@ -10,6 +10,9 @@ import {
     ActionMode,
     ComponentDefinition,
     LayoutDefinition,
+    ComponentType,
+    CameraViewId,
+    CameraViewDefinition,
 } from "./utils/component_definitions";
 import { className, ActionState, RemoteStream, RobotPose } from "shared/util";
 import {
@@ -609,7 +612,44 @@ export const Operator = (props: {
                         props.storageHandler.getDefaultLayoutNames();
                     const customNames =
                         props.storageHandler.getCustomLayoutNames();
-                    const combined = defaultNames.concat(customNames);
+
+                    // Create a camera-only layout that will occupy the whole page.
+                    const cameraOnlyLayout: LayoutDefinition = {
+                        type: ComponentType.Layout,
+                        displayMovementRecorder: false,
+                        displayTextToSpeech: false,
+                        displayLabels: true,
+                        actionMode: layout.current.actionMode,
+                        children: [
+                            {
+                                type: ComponentType.LayoutGrid,
+                                children: [
+                                    {
+                                        type: ComponentType.Panel,
+                                        children: [
+                                            {
+                                                type: ComponentType.SingleTab,
+                                                label: "Camera",
+                                                children: [
+                                                    {
+                                                        type: ComponentType.CameraView,
+                                                        id: CameraViewId.realsense,
+                                                        displayButtons: true,
+                                                        children: [],
+                                                    } as CameraViewDefinition,
+                                                ],
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                        ],
+                    };
+
+                    // Combined options: Camera Only first, then defaults and customs.
+                    const combinedNames = ["Camera Only"].concat(
+                        defaultNames.concat(customNames)
+                    );
 
                     // Try to find a matching name for the currently loaded layout by
                     // comparing serialized definitions. If no match, leave undefined so
@@ -617,15 +657,27 @@ export const Operator = (props: {
                     let matchedIndex: number | undefined = undefined;
                     try {
                         const currentJson = JSON.stringify(layout.current);
-                        for (let i = 0; i < defaultNames.length; i++) {
-                            const def = props.storageHandler.loadDefaultLayout(
-                                defaultNames[i] as any
-                            );
-                            if (JSON.stringify(def) === currentJson) {
-                                matchedIndex = i;
-                                break;
+
+                        // Check camera-only first
+                        if (JSON.stringify(cameraOnlyLayout) === currentJson) {
+                            matchedIndex = 0;
+                        }
+
+                        // Check defaults
+                        if (matchedIndex === undefined) {
+                            for (let i = 0; i < defaultNames.length; i++) {
+                                const def =
+                                    props.storageHandler.loadDefaultLayout(
+                                        defaultNames[i] as any
+                                    );
+                                if (JSON.stringify(def) === currentJson) {
+                                    matchedIndex = 1 + i; // +1 for Camera Only
+                                    break;
+                                }
                             }
                         }
+
+                        // Check customs
                         if (matchedIndex === undefined) {
                             for (let i = 0; i < customNames.length; i++) {
                                 const def =
@@ -633,7 +685,7 @@ export const Operator = (props: {
                                         customNames[i]
                                     );
                                 if (JSON.stringify(def) === currentJson) {
-                                    matchedIndex = defaultNames.length + i;
+                                    matchedIndex = 1 + defaultNames.length + i;
                                     break;
                                 }
                             }
@@ -647,20 +699,31 @@ export const Operator = (props: {
                     return (
                         <Dropdown
                             onChange={(idx) => {
-                                if (idx < defaultNames.length) {
+                                if (idx === 0) {
+                                    // Camera Only selected
+                                    layout.current = cameraOnlyLayout;
+                                    props.storageHandler.saveCurrentLayout(
+                                        layout.current
+                                    );
+                                    updateLayout();
+                                } else if (idx <= defaultNames.length) {
+                                    // default (idx - 1)
                                     globalOptionsProps.loadLayout(
-                                        defaultNames[idx],
+                                        defaultNames[idx - 1],
                                         true
                                     );
                                 } else {
+                                    // custom (idx - 1 - defaultNames.length)
                                     globalOptionsProps.loadLayout(
-                                        customNames[idx - defaultNames.length],
+                                        customNames[
+                                            idx - 1 - defaultNames.length
+                                        ],
                                         false
                                     );
                                 }
                             }}
                             selectedIndex={matchedIndex}
-                            possibleOptions={combined}
+                            possibleOptions={combinedNames}
                             placeholderText={
                                 matchedIndex === undefined
                                     ? "Current Layout"

@@ -149,12 +149,15 @@
 .dropdown-input-popup {
     position: absolute;
     min-width: 100%;
-    z-index: 3;
+    z-index: 1000; /* float above most UI elements */
     box-shadow: var(--shadow);
     border-radius: 0 0 var(--btn-brdr-radius) var(--btn-brdr-radius);
     top: 100%;
     bottom: auto;
     overflow-y: auto; /* Make it scrollable */
+    /* Prevent dropdown from overflowing the viewport horizontally */
+    max-width: calc(100vw - 2rem);
+    left: 0;
 }
 
 .dropdown-popup.top,
