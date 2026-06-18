@@ -107,7 +107,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
      */
     public updateJointStates(
         inJointLimit: ValidJointStateDict,
-        inCollision: ValidJointStateDict,
+        inCollision: ValidJointStateDict
     ) {
         // For all the joints that are in collision, set their corresponding buttons
         // either to collision (for the button corresponding to the direction the
@@ -134,14 +134,14 @@ export class ButtonFunctionProvider extends FunctionProvider {
                     buttonNeg,
                     inCollisionNeg
                         ? ButtonState.Collision
-                        : ButtonState.Inactive,
+                        : ButtonState.Inactive
                 );
             if (!prevButtonStatePos || inCollisionPos !== prevInCollisionPos)
                 this.buttonStateMap.set(
                     buttonPos,
                     inCollisionPos
                         ? ButtonState.Collision
-                        : ButtonState.Inactive,
+                        : ButtonState.Inactive
                 );
         });
 
@@ -164,7 +164,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
             )
                 this.buttonStateMap.set(
                     buttonNeg,
-                    inLimitNeg ? ButtonState.Inactive : ButtonState.Limit,
+                    inLimitNeg ? ButtonState.Inactive : ButtonState.Limit
                 );
             if (
                 prevButtonStatePos == undefined ||
@@ -172,7 +172,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
             )
                 this.buttonStateMap.set(
                     buttonPos,
-                    inLimitPos ? ButtonState.Inactive : ButtonState.Limit,
+                    inLimitPos ? ButtonState.Inactive : ButtonState.Limit
                 );
         });
 
@@ -186,7 +186,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
      * @param callback operator's callback function to update the button state map
      */
     public setOperatorCallback(
-        callback: (buttonStateMap: ButtonStateMap) => void,
+        callback: (buttonStateMap: ButtonStateMap) => void
     ) {
         this.operatorCallback = callback;
     }
@@ -205,7 +205,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
         const jointName: ValidJoints =
             getJointNameFromButtonFunction(buttonPadFunction);
         const multiplier: number = negativeButtonPadFunctions.has(
-            buttonPadFunction,
+            buttonPadFunction
         )
             ? -1
             : 1;
@@ -221,11 +221,15 @@ export class ButtonFunctionProvider extends FunctionProvider {
         switch (buttonPadFunction) {
             case ButtonPadButton.BaseForward:
             case ButtonPadButton.BaseReverse:
-                this.incrementalBaseDrive(velocity, 0.0);
+                // Use an incremental joint movement for base step actions so the
+                // distance moved scales with the velocity preset (via
+                // JOINT_INCREMENTS * velocityScale) instead of using a raw
+                // velocity which depends on duration.
+                this.incrementalJointMovement(jointName, increment);
                 break;
             case ButtonPadButton.BaseRotateLeft:
             case ButtonPadButton.BaseRotateRight:
-                this.incrementalBaseDrive(0.0, velocity);
+                this.incrementalJointMovement(jointName, increment);
                 break;
             case ButtonPadButton.CameraTiltUp:
             case ButtonPadButton.CameraTiltDown:
@@ -234,7 +238,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
                 this.incrementalJointMovement(jointName, increment);
                 FunctionProvider.remoteRobot?.setToggle(
                     "setFollowGripper",
-                    false,
+                    false
                 );
                 break;
             default:
@@ -243,10 +247,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
         }
 
         this.setButtonActiveState(buttonPadFunction);
-        setTimeout(
-            () => this.setButtonInactiveState(buttonPadFunction),
-            1000,
-        );
+        setTimeout(() => this.setButtonInactiveState(buttonPadFunction), 1000);
     }
 
     /**
@@ -297,7 +298,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
      * @returns the {@link ButtonFunctions} for the button
      */
     public provideFunctions(
-        buttonPadFunction: ButtonPadButton,
+        buttonPadFunction: ButtonPadButton
     ): ButtonFunctions {
         let action: () => void;
         const onLeave = () => {
@@ -308,7 +309,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
         const jointName: ValidJoints =
             getJointNameFromButtonFunction(buttonPadFunction);
         const multiplier: number = negativeButtonPadFunctions.has(
-            buttonPadFunction,
+            buttonPadFunction
         )
             ? -1
             : 1;
@@ -326,11 +327,13 @@ export class ButtonFunctionProvider extends FunctionProvider {
                 switch (buttonPadFunction) {
                     case ButtonPadButton.BaseForward:
                     case ButtonPadButton.BaseReverse:
-                        action = () => this.incrementalBaseDrive(velocity, 0.0);
+                        action = () =>
+                            this.incrementalJointMovement(jointName, increment);
                         break;
                     case ButtonPadButton.BaseRotateLeft:
                     case ButtonPadButton.BaseRotateRight:
-                        action = () => this.incrementalBaseDrive(0.0, velocity);
+                        action = () =>
+                            this.incrementalJointMovement(jointName, increment);
                         break;
                     case ButtonPadButton.ArmLower:
                     case ButtonPadButton.ArmLift:
@@ -355,7 +358,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
                             this.incrementalJointMovement(jointName, increment);
                             FunctionProvider.remoteRobot?.setToggle(
                                 "setFollowGripper",
-                                false,
+                                false
                             );
                         };
                         break;
@@ -368,7 +371,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
                         setTimeout(
                             () =>
                                 this.setButtonInactiveState(buttonPadFunction),
-                            1000,
+                            1000
                         );
                     },
                     onLeave: onLeave,
@@ -408,7 +411,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
                             this.continuousJointMovement(jointName, increment);
                             FunctionProvider.remoteRobot?.setToggle(
                                 "setFollowGripper",
-                                false,
+                                false
                             );
                         };
                         break;
@@ -433,7 +436,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
                               if (this.activeVelocityAction) {
                                   this.stopCurrentAction();
                                   this.setButtonInactiveState(
-                                      buttonPadFunction,
+                                      buttonPadFunction
                                   );
                               } else {
                                   action();
@@ -454,7 +457,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
  * negative or positive direction respectively)
  */
 function getButtonsFromJointName(
-    jointName: ValidJoints,
+    jointName: ValidJoints
 ): [ButtonPadButton, ButtonPadButton] | undefined {
     switch (jointName) {
         case "joint_gripper_finger_left":
@@ -507,7 +510,7 @@ function getButtonsFromJointName(
  * @returns the name of the corresponding joint
  */
 function getJointNameFromButtonFunction(
-    buttonType: ButtonPadButton,
+    buttonType: ButtonPadButton
 ): ValidJoints {
     switch (buttonType) {
         case ButtonPadButton.BaseReverse:
