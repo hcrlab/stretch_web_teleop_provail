@@ -97,12 +97,14 @@ function shouldIgnoreShortcut(event: KeyboardEvent): boolean {
     );
 }
 
-function cloneComponentDefinition<T extends ComponentDefinition>(definition: T): T {
+function cloneComponentDefinition<T extends ComponentDefinition>(
+    definition: T
+): T {
     const maybeParent = definition as T & { children?: ComponentDefinition[] };
     const clone = {
         ...definition,
         children: maybeParent.children?.map((child) =>
-            cloneComponentDefinition(child),
+            cloneComponentDefinition(child)
         ),
     };
 
@@ -133,9 +135,8 @@ export const Operator = (props: {
         React.useState<ActionState>();
     const [showTabletState, setShowTabletState] =
         React.useState<ActionState>(false);
-    const [robotNotHomed, setRobotNotHomed] =
-        React.useState<ActionState>(false);
-    function showHomeTheRobotGlobalControl(isHomed: ActionState) {
+    const [robotNotHomed, setRobotNotHomed] = React.useState<boolean>(false);
+    function showHomeTheRobotGlobalControl(isHomed: boolean) {
         setRobotNotHomed(!isHomed);
     }
     homeTheRobotFunctionProvider.setIsHomedCallback(
@@ -148,18 +149,93 @@ export const Operator = (props: {
         function handleKeyDown(event: KeyboardEvent) {
             if (shouldIgnoreShortcut(event)) return;
 
+            // First, handle robot-control keys (button pad shortcuts)
             const button = KEYBOARD_SHORTCUTS[event.code];
-            if (!button) return;
+            if (button) {
+                if (robotNotHomed && NOT_HOMED_DISABLED_SHORTCUTS.has(button)) {
+                    return;
+                }
 
-            if (
-                robotNotHomed &&
-                NOT_HOMED_DISABLED_SHORTCUTS.has(button)
-            ) {
+                event.preventDefault();
+                keyboardFunctionProvider.provideKeyboardShortcut(button)();
                 return;
             }
 
-            event.preventDefault();
-            keyboardFunctionProvider.provideKeyboardShortcut(button)();
+            // Next, handle UI/global shortcuts (non-robot interactions)
+            // All of these map keyboard keys to the same handlers used by the UI
+            switch (event.code) {
+                // Toggle customization mode
+                case "KeyC":
+                    event.preventDefault();
+                    handleToggleCustomize();
+                    break;
+
+                // Cycle action mode: Q = previous, E = next
+                case "KeyQ": {
+                    event.preventDefault();
+                    const modes = Object.values(ActionMode);
+                    const idx = modes.indexOf(layout.current.actionMode);
+                    const prev = modes[(idx - 1 + modes.length) % modes.length];
+                    setActionMode(prev);
+                    break;
+                }
+                case "KeyE": {
+                    event.preventDefault();
+                    const modes = Object.values(ActionMode);
+                    const idx = modes.indexOf(layout.current.actionMode);
+                    const next = modes[(idx + 1) % modes.length];
+                    setActionMode(next);
+                    break;
+                }
+
+                // Adjust velocity scale: Minus = decrease, Equal (=) = increase
+                case "Minus": {
+                    event.preventDefault();
+                    const step = 0.1;
+                    const newScale = Math.max(
+                        0.1,
+                        Math.round((velocityScale - step) * 10) / 10
+                    );
+                    setVelocityScale(newScale);
+                    FunctionProvider.velocityScale = newScale;
+                    break;
+                }
+                case "Equal": {
+                    event.preventDefault();
+                    const step = 0.1;
+                    const newScale = Math.min(
+                        1.0,
+                        Math.round((velocityScale + step) * 10) / 10
+                    );
+                    setVelocityScale(newScale);
+                    FunctionProvider.velocityScale = newScale;
+                    break;
+                }
+
+                // Toggle movement recorder (P)
+                case "KeyP":
+                    event.preventDefault();
+                    setDisplayMovementRecorder(
+                        !layout.current.displayMovementRecorder
+                    );
+                    break;
+
+                // Toggle text-to-speech (Z)
+                case "KeyZ":
+                    event.preventDefault();
+                    setDisplayTextToSpeech(!layout.current.displayTextToSpeech);
+                    break;
+
+                // Toggle labels (B)
+                case "KeyB":
+                    event.preventDefault();
+                    setDisplayLabels(!layout.current.displayLabels);
+                    break;
+
+                default:
+                    // Unhandled key
+                    break;
+            }
         }
 
         window.addEventListener("keydown", handleKeyDown);
