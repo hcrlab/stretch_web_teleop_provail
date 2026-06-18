@@ -119,7 +119,9 @@ function shouldIgnoreShortcut(
     }
 
     if (event.altKey && !isAltShortcut(event, pressedKeys)) {
-        return true;
+        // Allow Alt+Shift combos to bypass the Alt-layer requirement so
+        // Shift+Alt+<key> shortcuts work without holding the Digit2 layer key.
+        if (!event.shiftKey) return true;
     }
 
     return false;
