@@ -213,10 +213,16 @@ export class ButtonFunctionProvider extends FunctionProvider {
             multiplier *
             JOINT_VELOCITIES[jointName]! *
             FunctionProvider.velocityScale;
+        // Only scale the base increments (translate_mobile_base & rotate_mobile_base)
+        // by the velocity preset. Other joints (arm, wrist, gripper) keep their
+        // nominal increments so the arm behavior remains unchanged.
+        const isBaseJoint =
+            jointName === "translate_mobile_base" ||
+            jointName === "rotate_mobile_base";
         const increment =
             multiplier *
             JOINT_INCREMENTS[jointName]! *
-            FunctionProvider.velocityScale;
+            (isBaseJoint ? FunctionProvider.velocityScale : 1);
 
         switch (buttonPadFunction) {
             case ButtonPadButton.BaseForward:
@@ -317,10 +323,13 @@ export class ButtonFunctionProvider extends FunctionProvider {
             multiplier *
             JOINT_VELOCITIES[jointName]! *
             FunctionProvider.velocityScale;
+        const isBaseJoint =
+            jointName === "translate_mobile_base" ||
+            jointName === "rotate_mobile_base";
         const increment =
             multiplier *
             JOINT_INCREMENTS[jointName]! *
-            FunctionProvider.velocityScale;
+            (isBaseJoint ? FunctionProvider.velocityScale : 1);
 
         switch (FunctionProvider.actionMode) {
             case ActionMode.StepActions:
