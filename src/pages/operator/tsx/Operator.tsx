@@ -161,8 +161,9 @@ export const Operator = (props: {
     const [moveBaseState, setMoveBaseState] = React.useState<ActionState>();
     const [moveToPregraspState, setMoveToPregraspState] =
         React.useState<ActionState>();
-    const [showTabletState, setShowTabletState] =
-        React.useState<ActionState>(false);
+    const [showTabletState, setShowTabletState] = React.useState<
+        ActionState | undefined
+    >(undefined);
     const [robotNotHomed, setRobotNotHomed] = React.useState<boolean>(false);
     function showHomeTheRobotGlobalControl(isHomed: boolean) {
         setRobotNotHomed(!isHomed);
