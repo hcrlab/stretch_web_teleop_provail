@@ -351,10 +351,19 @@ export const Operator = (props: {
                     if (!(event.altKey && event.shiftKey)) break;
                     event.preventDefault();
                     {
-                        let idx = VELOCITY_SCALE.findIndex(
-                            (v) => v.scale === velocityScale
-                        );
-                        if (idx < 0) idx = 0;
+                        // Find the nearest preset index to the current velocityScale
+                        let idx = 0;
+                        let bestDiff = Infinity;
+                        for (let i = 0; i < VELOCITY_SCALE.length; i++) {
+                            const diff = Math.abs(
+                                VELOCITY_SCALE[i].scale - velocityScale
+                            );
+                            if (diff < bestDiff) {
+                                bestDiff = diff;
+                                idx = i;
+                            }
+                        }
+
                         const prev =
                             (idx - 1 + VELOCITY_SCALE.length) %
                             VELOCITY_SCALE.length;
@@ -368,10 +377,19 @@ export const Operator = (props: {
                     if (!(event.altKey && event.shiftKey)) break;
                     event.preventDefault();
                     {
-                        let idx = VELOCITY_SCALE.findIndex(
-                            (v) => v.scale === velocityScale
-                        );
-                        if (idx < 0) idx = 0;
+                        // Find the nearest preset index to the current velocityScale
+                        let idx = 0;
+                        let bestDiff = Infinity;
+                        for (let i = 0; i < VELOCITY_SCALE.length; i++) {
+                            const diff = Math.abs(
+                                VELOCITY_SCALE[i].scale - velocityScale
+                            );
+                            if (diff < bestDiff) {
+                                bestDiff = diff;
+                                idx = i;
+                            }
+                        }
+
                         const next = (idx + 1) % VELOCITY_SCALE.length;
                         const newScale = VELOCITY_SCALE[next].scale;
                         setVelocityScale(newScale);
