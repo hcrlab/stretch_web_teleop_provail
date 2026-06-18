@@ -20,10 +20,10 @@ export class PredictiveDisplayFunctionProvider extends FunctionProvider {
     ): PredictiveDisplayFunctions {
         const baseLinVel =
             JOINT_VELOCITIES["translate_mobile_base"]! *
-            FunctionProvider.baseVelocityScale;
+            FunctionProvider.velocityScale;
         const baseAngVel =
             JOINT_VELOCITIES["rotate_mobile_base"]! *
-            FunctionProvider.baseVelocityScale;
+            FunctionProvider.velocityScale;
         switch (FunctionProvider.actionMode) {
             case ActionMode.StepActions:
                 return {

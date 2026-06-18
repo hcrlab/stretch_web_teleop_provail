@@ -202,39 +202,25 @@ export class ButtonFunctionProvider extends FunctionProvider {
      * @param buttonPadFunction the {@link ButtonPadButton} to execute once
      */
     public pressButtonOnce(buttonPadFunction: ButtonPadButton) {
-        const jointName: ValidJoints =
-            getJointNameFromButtonFunction(buttonPadFunction);
-        const multiplier: number = negativeButtonPadFunctions.has(
-            buttonPadFunction
-        )
-            ? -1
-            : 1;
+        const jointName: ValidJoints = getJointNameFromButtonFunction(buttonPadFunction);
+        const multiplier: number = negativeButtonPadFunctions.has(buttonPadFunction) ? -1 : 1;
         const isBaseJoint =
-            jointName === "translate_mobile_base" ||
-            jointName === "rotate_mobile_base";
+            jointName === "translate_mobile_base" || jointName === "rotate_mobile_base";
 
-        const velocity =
-            multiplier *
-            JOINT_VELOCITIES[jointName]! *
-            (isBaseJoint
-                ? FunctionProvider.baseVelocityScale
-                : FunctionProvider.velocityScale);
+        // Shared velocityScale controls both arm and base speeds so the base
+        // moves faster as the user increases the global SpeedControl.
+        const velocity = multiplier * JOINT_VELOCITIES[jointName]! * FunctionProvider.velocityScale;
 
-        // Only scale the base increments (translate_mobile_base & rotate_mobile_base)
-        // by the base velocity preset. Other joints (arm, wrist, gripper) keep their
-        // nominal increments so the arm behavior remains unchanged.
+        // Step increments for the base should also scale with velocityScale so
+        // pressing a step moves farther at higher speed presets.
         const increment =
-            multiplier *
-            JOINT_INCREMENTS[jointName]! *
-            (isBaseJoint ? FunctionProvider.baseVelocityScale : 1);
+            multiplier * JOINT_INCREMENTS[jointName]! * (isBaseJoint ? FunctionProvider.velocityScale : 1);
 
         switch (buttonPadFunction) {
             case ButtonPadButton.BaseForward:
             case ButtonPadButton.BaseReverse:
                 // Use an incremental joint movement for base step actions so the
-                // distance moved scales with the velocity preset (via
-                // JOINT_INCREMENTS * velocityScale) and so mock backends that
-                // implement incrementalMove continue to work.
+                // distance moved scales with the velocity preset.
                 this.incrementalJointMovement(jointName, increment);
                 break;
             case ButtonPadButton.BaseRotateLeft:
@@ -246,10 +232,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
             case ButtonPadButton.CameraPanLeft:
             case ButtonPadButton.CameraPanRight:
                 this.incrementalJointMovement(jointName, increment);
-                FunctionProvider.remoteRobot?.setToggle(
-                    "setFollowGripper",
-                    false
-                );
+                FunctionProvider.remoteRobot?.setToggle("setFollowGripper", false);
                 break;
             default:
                 this.incrementalJointMovement(jointName, increment);
@@ -328,17 +311,10 @@ export class ButtonFunctionProvider extends FunctionProvider {
             jointName === "translate_mobile_base" ||
             jointName === "rotate_mobile_base";
 
-        const velocity =
-            multiplier *
-            JOINT_VELOCITIES[jointName]! *
-            (isBaseJoint
-                ? FunctionProvider.baseVelocityScale
-                : FunctionProvider.velocityScale);
+        const velocity = multiplier * JOINT_VELOCITIES[jointName]! * FunctionProvider.velocityScale;
 
         const increment =
-            multiplier *
-            JOINT_INCREMENTS[jointName]! *
-            (isBaseJoint ? FunctionProvider.baseVelocityScale : 1);
+            multiplier * JOINT_INCREMENTS[jointName]! * (isBaseJoint ? FunctionProvider.velocityScale : 1);
 
         switch (FunctionProvider.actionMode) {
             case ActionMode.StepActions:
