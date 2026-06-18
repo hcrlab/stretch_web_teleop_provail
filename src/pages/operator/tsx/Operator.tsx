@@ -351,10 +351,13 @@ export const Operator = (props: {
                     if (!(event.altKey && event.shiftKey)) break;
                     event.preventDefault();
                     {
-                        const idx = VELOCITY_SCALE.findIndex(
+                        let idx = VELOCITY_SCALE.findIndex(
                             (v) => v.scale === velocityScale
                         );
-                        const prev = Math.max(0, idx - 1);
+                        if (idx < 0) idx = 0;
+                        const prev =
+                            (idx - 1 + VELOCITY_SCALE.length) %
+                            VELOCITY_SCALE.length;
                         const newScale = VELOCITY_SCALE[prev].scale;
                         setVelocityScale(newScale);
                         FunctionProvider.velocityScale = newScale;
@@ -365,13 +368,11 @@ export const Operator = (props: {
                     if (!(event.altKey && event.shiftKey)) break;
                     event.preventDefault();
                     {
-                        const idx = VELOCITY_SCALE.findIndex(
+                        let idx = VELOCITY_SCALE.findIndex(
                             (v) => v.scale === velocityScale
                         );
-                        const next = Math.min(
-                            VELOCITY_SCALE.length - 1,
-                            idx + 1
-                        );
+                        if (idx < 0) idx = 0;
+                        const next = (idx + 1) % VELOCITY_SCALE.length;
                         const newScale = VELOCITY_SCALE[next].scale;
                         setVelocityScale(newScale);
                         FunctionProvider.velocityScale = newScale;
