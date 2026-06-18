@@ -260,13 +260,21 @@ export const Operator = (props: {
         function handleKeyDown(event: KeyboardEvent) {
             pressedKeys.add(event.code);
 
+            // If the user presses the Alt-layer key (Digit2) by itself, swallow
+            // it so it acts as a temporary layer toggle. However, if Shift is
+            // also held (e.g., Alt+Shift+Digit2 used as a speed preset), allow
+            // the event to pass through so the Digit2 handling can run.
             if (
                 event.altKey &&
                 event.code === ALT_SHORTCUT_LAYER_KEY &&
                 !isShortcutTextTarget(event)
             ) {
-                event.preventDefault();
-                return;
+                if (!event.shiftKey) {
+                    event.preventDefault();
+                    return;
+                }
+                // else: allow Alt+Shift+Digit2 to be handled by the general
+                // shortcut handlers (this enables Alt+Shift+Digit2 preset).
             }
 
             if (shouldIgnoreShortcut(event, pressedKeys)) return;
@@ -285,6 +293,25 @@ export const Operator = (props: {
                 event.preventDefault();
                 keyboardFunctionProvider.provideKeyboardShortcut(button)();
                 return;
+            }
+
+            // Fallback: on some keyboard layouts the physical number keys with
+            // modifiers may produce different `code` values but `key` will be
+            // the visible character (e.g. '1','2'). Support Alt+Shift+'1'..'5'
+            // via event.key so Alt+Shift+2 works regardless of layout.
+            if (event.altKey && event.shiftKey) {
+                const keyDigitMatch = /^[1-5]$/.exec(event.key);
+                if (keyDigitMatch) {
+                    event.preventDefault();
+                    const idx = parseInt(keyDigitMatch[0], 10) - 1;
+                    if (idx >= 0 && idx < VELOCITY_SCALE.length) {
+                        const newScale = VELOCITY_SCALE[idx].scale;
+                        setVelocityScale(newScale);
+                        velocityScaleRef.current = newScale;
+                        FunctionProvider.velocityScale = newScale;
+                    }
+                    return;
+                }
             }
 
             // Next, handle UI/global shortcuts (non-robot interactions)
