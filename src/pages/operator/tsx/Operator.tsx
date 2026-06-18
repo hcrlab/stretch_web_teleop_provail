@@ -3,6 +3,7 @@ import { AudioControl } from "./static_components/AudioControl";
 import { SpeedControl } from "./static_components/SpeedControl";
 import { LayoutArea } from "./static_components/LayoutArea";
 import { CustomizeButton } from "./static_components/CustomizeButton";
+import { LoadLayoutModal } from "./static_components/Sidebar";
 import { GlobalOptionsProps, Sidebar } from "./static_components/Sidebar";
 import { SharedState } from "./layout_components/CustomizableComponent";
 import {
@@ -173,6 +174,9 @@ export const Operator = (props: {
     homeTheRobotFunctionProvider.setIsHomedCallback(
         showHomeTheRobotGlobalControl
     );
+
+    const [showLoadLayoutModal, setShowLoadLayoutModal] =
+        React.useState<boolean>(false);
 
     React.useEffect(() => {
         if (customizing) return;
@@ -599,11 +603,29 @@ export const Operator = (props: {
                         FunctionProvider.velocityScale = newScale;
                     }}
                 />
+                {/* Load layout button (opens same modal as sidebar) */}
+                <button
+                    id="load-layout-header-button"
+                    title="Load layout"
+                    onClick={() => setShowLoadLayoutModal(true)}
+                >
+                    Load
+                </button>
                 <CustomizeButton
                     customizing={customizing}
                     onClick={handleToggleCustomize}
+                    showText={false}
                 />
             </div>
+            <LoadLayoutModal
+                defaultLayouts={Object.keys(DEFAULT_LAYOUTS)}
+                customLayouts={props.storageHandler.getCustomLayoutNames()}
+                loadLayout={(name: string, dflt: boolean) =>
+                    globalOptionsProps.loadLayout(name, dflt)
+                }
+                setShow={setShowLoadLayoutModal}
+                show={showLoadLayoutModal}
+            />
             {robotNotHomed && (
                 <div className="operator-collision-alerts">
                     <div
