@@ -381,11 +381,16 @@ export class ButtonFunctionProvider extends FunctionProvider {
                 switch (buttonPadFunction) {
                     case ButtonPadButton.BaseForward:
                     case ButtonPadButton.BaseReverse:
-                        action = () => this.continuousBaseDrive(velocity, 0.0);
+                        // Use joint-based continuous movement so the base responds
+                        // to the velocity preset in the same way as the arm: the
+                        // increment is scaled by the preset and sent repeatedly.
+                        action = () =>
+                            this.continuousJointMovement(jointName, increment);
                         break;
                     case ButtonPadButton.BaseRotateLeft:
                     case ButtonPadButton.BaseRotateRight:
-                        action = () => this.continuousBaseDrive(0.0, velocity);
+                        action = () =>
+                            this.continuousJointMovement(jointName, increment);
                         break;
 
                     case ButtonPadButton.ArmLower:
