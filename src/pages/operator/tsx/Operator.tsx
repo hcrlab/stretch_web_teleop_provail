@@ -162,6 +162,15 @@ export const Operator = (props: {
     const [velocityScale, setVelocityScale] = React.useState<number>(
         FunctionProvider.velocityScale
     );
+    // Keep a ref in sync so event handlers (which capture closures) can
+    // always read the latest velocity scale without needing to re-register
+    // the DOM event listeners on every change.
+    const velocityScaleRef = React.useRef<number>(
+        FunctionProvider.velocityScale
+    );
+    React.useEffect(() => {
+        velocityScaleRef.current = velocityScale;
+    }, [velocityScale]);
     const [buttonCollision, setButtonCollision] = React.useState<
         ButtonPadButton[]
     >([]);
@@ -314,6 +323,7 @@ export const Operator = (props: {
                         Math.round((velocityScale - step) * 10) / 10
                     );
                     setVelocityScale(newScale);
+                    velocityScaleRef.current = newScale;
                     FunctionProvider.velocityScale = newScale;
                     break;
                 }
@@ -325,6 +335,7 @@ export const Operator = (props: {
                         Math.round((velocityScale + step) * 10) / 10
                     );
                     setVelocityScale(newScale);
+                    velocityScaleRef.current = newScale;
                     FunctionProvider.velocityScale = newScale;
                     break;
                 }
@@ -341,6 +352,7 @@ export const Operator = (props: {
                     if (idx >= 0 && idx < VELOCITY_SCALE.length) {
                         const newScale = VELOCITY_SCALE[idx].scale;
                         setVelocityScale(newScale);
+                        velocityScaleRef.current = newScale;
                         FunctionProvider.velocityScale = newScale;
                     }
                     break;
@@ -356,7 +368,8 @@ export const Operator = (props: {
                         let bestDiff = Infinity;
                         for (let i = 0; i < VELOCITY_SCALE.length; i++) {
                             const diff = Math.abs(
-                                VELOCITY_SCALE[i].scale - velocityScale
+                                VELOCITY_SCALE[i].scale -
+                                    velocityScaleRef.current
                             );
                             if (diff < bestDiff) {
                                 bestDiff = diff;
@@ -369,6 +382,7 @@ export const Operator = (props: {
                             VELOCITY_SCALE.length;
                         const newScale = VELOCITY_SCALE[prev].scale;
                         setVelocityScale(newScale);
+                        velocityScaleRef.current = newScale;
                         FunctionProvider.velocityScale = newScale;
                     }
                     break;
@@ -382,7 +396,8 @@ export const Operator = (props: {
                         let bestDiff = Infinity;
                         for (let i = 0; i < VELOCITY_SCALE.length; i++) {
                             const diff = Math.abs(
-                                VELOCITY_SCALE[i].scale - velocityScale
+                                VELOCITY_SCALE[i].scale -
+                                    velocityScaleRef.current
                             );
                             if (diff < bestDiff) {
                                 bestDiff = diff;
