@@ -192,9 +192,13 @@ export const Operator = (props: {
 
             if (shouldIgnoreShortcut(event, pressedKeys)) return;
 
-            // First, handle robot-control keys (button pad shortcuts)
+            // First, handle robot-control keys (button pad shortcuts).
+            // Require Shift+Alt to activate these so they don't trigger
+            // accidentally while typing or using other UI keys.
             const button = KEYBOARD_SHORTCUTS[event.code];
             if (button) {
+                if (!(event.shiftKey && event.altKey)) return;
+
                 if (robotNotHomed && NOT_HOMED_DISABLED_SHORTCUTS.has(button)) {
                     return;
                 }
@@ -539,6 +543,12 @@ export const Operator = (props: {
         hasBetaTeleopKit: hasBetaTeleopKit,
         stretchTool: stretchTool,
         robotNotHomed: robotNotHomed,
+        onLayoutChange: (newLayout?: LayoutDefinition) => {
+            if (!newLayout) return;
+            layout.current = newLayout;
+            props.storageHandler.saveCurrentLayout(layout.current);
+            updateLayout();
+        },
     };
 
     /** Properties for the global options area of the sidebar */
