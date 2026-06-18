@@ -94,4 +94,3 @@ export class KeyboardFunctionProvider extends ButtonFunctionProvider {
         }
     }
 }
-    }
