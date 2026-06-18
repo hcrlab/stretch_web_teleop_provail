@@ -10,6 +10,9 @@ import { ActionMode } from "../utils/component_definitions";
 export abstract class FunctionProvider {
     protected static remoteRobot?: RemoteRobot;
     public static velocityScale: number;
+    // Separate scale for base (mobile base) movements so base can be
+    // tuned independently from arm/wrist/gripper motions.
+    public static baseVelocityScale: number;
     public static actionMode: ActionMode;
     public activeVelocityAction?: VelocityCommand;
     public velocityExecutionHeartbeat?: number; // ReturnType<typeof setInterval>
@@ -33,6 +36,7 @@ export abstract class FunctionProvider {
      */
     static initialize(velocityScale: number, actionMode: ActionMode) {
         this.velocityScale = velocityScale;
+        this.baseVelocityScale = velocityScale;
         this.actionMode = actionMode;
     }
 
@@ -40,7 +44,7 @@ export abstract class FunctionProvider {
         this.stopCurrentAction();
         this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
             linVel,
-            angVel,
+            angVel
         );
     }
 
@@ -54,12 +58,12 @@ export abstract class FunctionProvider {
         this.stopCurrentAction();
         this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
             linVel,
-            angVel,
+            angVel
         );
         this.velocityExecutionHeartbeat = window.setInterval(() => {
             this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
                 linVel,
-                angVel,
+                angVel
             );
         }, 150);
     }
@@ -72,7 +76,7 @@ export abstract class FunctionProvider {
             this.activeVelocityAction =
                 FunctionProvider.remoteRobot?.incrementalMove(
                     jointName,
-                    increment,
+                    increment
                 );
         }, 150);
     }

@@ -209,32 +209,37 @@ export class ButtonFunctionProvider extends FunctionProvider {
         )
             ? -1
             : 1;
-        const velocity =
-            multiplier *
-            JOINT_VELOCITIES[jointName]! *
-            FunctionProvider.velocityScale;
-        // Only scale the base increments (translate_mobile_base & rotate_mobile_base)
-        // by the velocity preset. Other joints (arm, wrist, gripper) keep their
-        // nominal increments so the arm behavior remains unchanged.
         const isBaseJoint =
             jointName === "translate_mobile_base" ||
             jointName === "rotate_mobile_base";
+
+        const velocity =
+            multiplier *
+            JOINT_VELOCITIES[jointName]! *
+            (isBaseJoint
+                ? FunctionProvider.baseVelocityScale
+                : FunctionProvider.velocityScale);
+
+        // Only scale the base increments (translate_mobile_base & rotate_mobile_base)
+        // by the base velocity preset. Other joints (arm, wrist, gripper) keep their
+        // nominal increments so the arm behavior remains unchanged.
         const increment =
             multiplier *
             JOINT_INCREMENTS[jointName]! *
-            (isBaseJoint ? FunctionProvider.velocityScale : 1);
+            (isBaseJoint ? FunctionProvider.baseVelocityScale : 1);
 
         switch (buttonPadFunction) {
             case ButtonPadButton.BaseForward:
             case ButtonPadButton.BaseReverse:
-                // Use velocity-based incremental base drive for step actions so
-                // the base actually moves on systems that expect cmd_vel style
-                // control. Velocity is already scaled by FunctionProvider.velocityScale.
-                this.incrementalBaseDrive(velocity, 0);
+                // Use an incremental joint movement for base step actions so the
+                // distance moved scales with the velocity preset (via
+                // JOINT_INCREMENTS * velocityScale) and so mock backends that
+                // implement incrementalMove continue to work.
+                this.incrementalJointMovement(jointName, increment);
                 break;
             case ButtonPadButton.BaseRotateLeft:
             case ButtonPadButton.BaseRotateRight:
-                this.incrementalBaseDrive(0, velocity);
+                this.incrementalJointMovement(jointName, increment);
                 break;
             case ButtonPadButton.CameraTiltUp:
             case ButtonPadButton.CameraTiltDown:
@@ -318,17 +323,22 @@ export class ButtonFunctionProvider extends FunctionProvider {
         )
             ? -1
             : 1;
-        const velocity =
-            multiplier *
-            JOINT_VELOCITIES[jointName]! *
-            FunctionProvider.velocityScale;
+
         const isBaseJoint =
             jointName === "translate_mobile_base" ||
             jointName === "rotate_mobile_base";
+
+        const velocity =
+            multiplier *
+            JOINT_VELOCITIES[jointName]! *
+            (isBaseJoint
+                ? FunctionProvider.baseVelocityScale
+                : FunctionProvider.velocityScale);
+
         const increment =
             multiplier *
             JOINT_INCREMENTS[jointName]! *
-            (isBaseJoint ? FunctionProvider.velocityScale : 1);
+            (isBaseJoint ? FunctionProvider.baseVelocityScale : 1);
 
         switch (FunctionProvider.actionMode) {
             case ActionMode.StepActions:

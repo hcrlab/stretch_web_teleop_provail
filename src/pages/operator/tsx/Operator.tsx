@@ -171,6 +171,18 @@ export const Operator = (props: {
     React.useEffect(() => {
         velocityScaleRef.current = velocityScale;
     }, [velocityScale]);
+    // Separate base velocity scale with its own ref
+    const [baseVelocityScale, setBaseVelocityScale] = React.useState<number>(
+        (FunctionProvider as any).baseVelocityScale ||
+            FunctionProvider.velocityScale
+    );
+    const baseVelocityScaleRef = React.useRef<number>(
+        (FunctionProvider as any).baseVelocityScale ||
+            FunctionProvider.velocityScale
+    );
+    React.useEffect(() => {
+        baseVelocityScaleRef.current = baseVelocityScale;
+    }, [baseVelocityScale]);
     const [buttonCollision, setButtonCollision] = React.useState<
         ButtonPadButton[]
     >([]);
@@ -803,6 +815,14 @@ export const Operator = (props: {
                     onChange={(newScale: number) => {
                         setVelocityScale(newScale);
                         FunctionProvider.velocityScale = newScale;
+                    }}
+                />
+                {/* Base speed control separate from arm/wrist/gripper */}
+                <SpeedControl
+                    scale={baseVelocityScale}
+                    onChange={(newScale: number) => {
+                        setBaseVelocityScale(newScale);
+                        (FunctionProvider as any).baseVelocityScale = newScale;
                     }}
                 />
                 {/* Load layout dropdown (shows current layout name when matched) */}
