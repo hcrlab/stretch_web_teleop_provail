@@ -1,0 +1,11 @@
+source;share/stretch_web_teleop_provail/hook/cmake_prefix_path.ps1
+source;share/stretch_web_teleop_provail/hook/cmake_prefix_path.dsv
+source;share/stretch_web_teleop_provail/hook/cmake_prefix_path.sh
+source;share/stretch_web_teleop_provail/hook/ld_library_path_lib.ps1
+source;share/stretch_web_teleop_provail/hook/ld_library_path_lib.dsv
+source;share/stretch_web_teleop_provail/hook/ld_library_path_lib.sh
+source;share/stretch_web_teleop_provail/local_setup.bash
+source;share/stretch_web_teleop_provail/local_setup.dsv
+source;share/stretch_web_teleop_provail/local_setup.ps1
+source;share/stretch_web_teleop_provail/local_setup.sh
+source;share/stretch_web_teleop_provail/local_setup.zsh

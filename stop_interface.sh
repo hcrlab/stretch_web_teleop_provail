@@ -8,7 +8,7 @@
 # power-cycling is necessary is a bug (e.g., with realsense code),
 # but this would not arise if this script properly terminates
 # realsense nodes.
-screen -S "web_teleop_ros" -X stuff '^C'
+screen -S "web_teleop_ros_provail" -X stuff '^C'
 t1=$?
 sleep 3;
 if [[ $t1 -ne 0 ]]; then

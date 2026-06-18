@@ -1,5 +1,7 @@
 # Overview
 
+**NOTE: This repo is for a user study conducted at Provail. For setup and development help, go to provail_docs/**
+
 This interface enables a user to remotely teleoperate a Stretch robot through a web browser. This website can be set up to teleoperate the robot remotely from anywhere in the world with an internet connection, or simply eyes-off teleop from the next room on a local network. The codebase is built on ROS2, WebRTC, Nav2, and TypeScript.
 
 # Setup & Installation

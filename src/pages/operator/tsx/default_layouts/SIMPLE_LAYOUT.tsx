@@ -31,10 +31,10 @@ export const BASIC_LAYOUT: LayoutDefinition = {
                             type: ComponentType.SingleTab,
                             label: "Camera Views",
                             children: [
-                                // Overhead camera
+                                // Realsense camera (instead of overhead)
                                 {
                                     type: ComponentType.CameraView,
-                                    id: CameraViewId.overhead,
+                                    id: CameraViewId.realsense,
                                     displayButtons: true,
                                     children: [],
                                 } as CameraViewDefinition,

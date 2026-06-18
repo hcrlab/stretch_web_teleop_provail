@@ -1,10 +1,10 @@
 import React from "react";
 import {
-    ComponentDefinition,
+    ComponentType,
     LayoutDefinition,
     LayoutGridDefinition,
     PanelDefinition,
-    ParentComponentDefinition,
+    TabDefinition,
 } from "operator/tsx/utils/component_definitions";
 import { SharedState } from "../layout_components/CustomizableComponent";
 import {
@@ -21,6 +21,28 @@ type LayoutAreaProps = {
     sharedState: SharedState;
 };
 
+function getPanelDefaultFlex(panel: PanelDefinition): number {
+    const firstTab = panel.children[0] as TabDefinition | undefined;
+    if (!firstTab || firstTab.type !== ComponentType.SingleTab) return 1;
+    if (firstTab.label === "Safety") return 1;
+    return Math.max(firstTab.children.length + 1, 1);
+}
+
+function getPanelFlex(panel: PanelDefinition): number {
+    return panel.flexGrow ?? getPanelDefaultFlex(panel);
+}
+
+function getLayoutGridFlex(layoutGrid: LayoutGridDefinition): number {
+    if (layoutGrid.children.length === 0) return 1;
+    return Math.max(
+        1,
+        layoutGrid.children.reduce(
+            (total, panel) => total + getPanelFlex(panel),
+            0,
+        ),
+    );
+}
+
 /** Main area of the interface where the user can add, remove, or rearrange elements. */
 export const LayoutArea = (props: LayoutAreaProps) => {
     // const componentListProps: ComponentListProps = {
@@ -29,19 +51,24 @@ export const LayoutArea = (props: LayoutAreaProps) => {
     //     sharedState: props.sharedState
     // }
     const panelColumn = props.layout.children;
-    const dropZoneIdx = 0;
     return (
         <>
             {panelColumn.map((compDef: LayoutGridDefinition, index: number) => {
+                const layoutGridFlex = getLayoutGridFlex(compDef);
                 return (
                     // compDef.children.length > 0 ?
-                    <>
+                    <React.Fragment key={"layout-grid-wrapper-" + `${index}`}>
                         <DropZone
                             path={`${index}`}
                             sharedState={props.sharedState}
                             parentDef={props.layout}
                         />
-                        <div id="layout-area">
+                        <div
+                            className="layout-area"
+                            style={{
+                                flex: `${layoutGridFlex} ${layoutGridFlex} 0px`,
+                            }}
+                        >
                             <ComponentList
                                 key={"layout-grid-" + `${index}`}
                                 {...({
@@ -51,7 +78,7 @@ export const LayoutArea = (props: LayoutAreaProps) => {
                                 } as ComponentListProps)}
                             />
                         </div>
-                    </>
+                    </React.Fragment>
                     // :
                     // <></>
                 );

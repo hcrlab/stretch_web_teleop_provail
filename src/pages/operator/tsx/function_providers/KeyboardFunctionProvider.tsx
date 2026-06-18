@@ -31,7 +31,6 @@ export class KeyboardFunctionProvider extends ButtonFunctionProvider {
     public provideKeyboardShortcut(button: ButtonPadButton): () => void {
         return () => this.pressButtonOnce(button);
     }
-
     /** Starts listening for WASD keys to drive the base. */
     public enableBaseDrivingShortcuts() {
         window.addEventListener("keydown", this.handleKeyDown);
@@ -95,3 +94,4 @@ export class KeyboardFunctionProvider extends ButtonFunctionProvider {
         }
     }
 }
+    }

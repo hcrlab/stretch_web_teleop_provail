@@ -21,6 +21,8 @@ export type SharedState = {
     customizing: boolean;
     /** Called when user clicks on a component */
     onSelect: (def: ComponentDefinition, path?: string) => void;
+    /** Called when customization mutates the layout in place. */
+    onLayoutChange: () => void;
     /** Remote robot video streams */
     remoteStreams: Map<string, RemoteStream>;
     /** State required for all dropzones */
