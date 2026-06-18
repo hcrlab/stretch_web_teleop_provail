@@ -1,6 +1,6 @@
 import React from "react";
-import { AudioControl } from "./static_components/AudioControl";
-import { SpeedControl } from "./static_components/SpeedControl";
+// AudioControl removed from header per UX request
+import { SpeedControl, VELOCITY_SCALE } from "./static_components/SpeedControl";
 import { LayoutArea } from "./static_components/LayoutArea";
 import { CustomizeButton } from "./static_components/CustomizeButton";
 import { LoadLayoutModal } from "./static_components/Sidebar";
@@ -14,6 +14,7 @@ import {
     CameraViewId,
     CameraViewDefinition,
 } from "./utils/component_definitions";
+
 import { className, ActionState, RemoteStream, RobotPose } from "shared/util";
 import {
     buttonFunctionProvider,
@@ -110,6 +111,20 @@ function isAltShortcut(
     );
 }
 
+function cloneComponentDefinition<T extends ComponentDefinition>(
+    definition: T
+): T {
+    const maybeParent = definition as T & { children?: ComponentDefinition[] };
+    const clone = {
+        ...definition,
+        children: maybeParent.children?.map((child) =>
+            cloneComponentDefinition(child)
+        ),
+    };
+
+    return clone as T;
+}
+
 function shouldIgnoreShortcut(
     event: KeyboardEvent,
     pressedKeys: Set<string>
@@ -129,20 +144,6 @@ function shouldIgnoreShortcut(
     }
 
     return false;
-}
-
-function cloneComponentDefinition<T extends ComponentDefinition>(
-    definition: T
-): T {
-    const maybeParent = definition as T & { children?: ComponentDefinition[] };
-    const clone = {
-        ...definition,
-        children: maybeParent.children?.map((child) =>
-            cloneComponentDefinition(child)
-        ),
-    };
-
-    return clone as T;
 }
 
 /** Operator interface webpage */
@@ -180,6 +181,66 @@ export const Operator = (props: {
 
     const [showLoadLayoutModal, setShowLoadLayoutModal] =
         React.useState<boolean>(false);
+
+    // State to control the header layout dropdown open state so keyboard can open it
+    const [layoutDropdownOpen, setLayoutDropdownOpen] =
+        React.useState<boolean>(false);
+
+    // Helper to programmatically select the header layout index (0 = Camera Only, 1.. = defaults/customs)
+    function handleLayoutSelectIndex(idx: number) {
+        const defaultNames = props.storageHandler.getDefaultLayoutNames();
+        const customNames = props.storageHandler.getCustomLayoutNames();
+        if (idx === 0) {
+            // Camera Only selection: recreate camera-only layout and apply
+            const cameraOnlyLayout: LayoutDefinition = {
+                type: ComponentType.Layout,
+                displayMovementRecorder: false,
+                displayTextToSpeech: false,
+                displayLabels: true,
+                actionMode: layout.current.actionMode,
+                children: [
+                    {
+                        type: ComponentType.LayoutGrid,
+                        children: [
+                            {
+                                type: ComponentType.Panel,
+                                children: [
+                                    {
+                                        type: ComponentType.SingleTab,
+                                        label: "Camera",
+                                        children: [
+                                            {
+                                                type: ComponentType.CameraView,
+                                                id: CameraViewId.realsense,
+                                                displayButtons: true,
+                                                children: [],
+                                            } as any,
+                                        ],
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            };
+            layout.current = cameraOnlyLayout;
+            props.storageHandler.saveCurrentLayout(layout.current);
+            updateLayout();
+            return;
+        }
+
+        // defaults are offset by 1
+        if (idx <= defaultNames.length) {
+            globalOptionsProps.loadLayout(defaultNames[idx - 1], true);
+            return;
+        }
+
+        // custom
+        globalOptionsProps.loadLayout(
+            customNames[idx - 1 - defaultNames.length],
+            false
+        );
+    }
 
     React.useEffect(() => {
         if (customizing) return;
@@ -265,6 +326,84 @@ export const Operator = (props: {
                     );
                     setVelocityScale(newScale);
                     FunctionProvider.velocityScale = newScale;
+                    break;
+                }
+
+                // Quick set velocity presets: Alt+Shift+Digit1..5 map to the five presets
+                case "Digit1":
+                case "Digit2":
+                case "Digit3":
+                case "Digit4":
+                case "Digit5": {
+                    if (!(event.altKey && event.shiftKey)) break;
+                    event.preventDefault();
+                    const idx = parseInt(event.code.replace("Digit", "")) - 1;
+                    if (idx >= 0 && idx < VELOCITY_SCALE.length) {
+                        const newScale = VELOCITY_SCALE[idx].scale;
+                        setVelocityScale(newScale);
+                        FunctionProvider.velocityScale = newScale;
+                    }
+                    break;
+                }
+
+                // Step velocity while in menu: Alt+Shift+Comma => prev, Alt+Shift+Period => next
+                case "Comma": {
+                    if (!(event.altKey && event.shiftKey)) break;
+                    event.preventDefault();
+                    {
+                        const idx = VELOCITY_SCALE.findIndex(
+                            (v) => v.scale === velocityScale
+                        );
+                        const prev = Math.max(0, idx - 1);
+                        const newScale = VELOCITY_SCALE[prev].scale;
+                        setVelocityScale(newScale);
+                        FunctionProvider.velocityScale = newScale;
+                    }
+                    break;
+                }
+                case "Period": {
+                    if (!(event.altKey && event.shiftKey)) break;
+                    event.preventDefault();
+                    {
+                        const idx = VELOCITY_SCALE.findIndex(
+                            (v) => v.scale === velocityScale
+                        );
+                        const next = Math.min(
+                            VELOCITY_SCALE.length - 1,
+                            idx + 1
+                        );
+                        const newScale = VELOCITY_SCALE[next].scale;
+                        setVelocityScale(newScale);
+                        FunctionProvider.velocityScale = newScale;
+                    }
+                    break;
+                }
+
+                // Layout dropdown keyboard: Alt+Shift+L opens the layout dropdown
+                case "KeyL": {
+                    if (!(event.altKey && event.shiftKey)) break;
+                    event.preventDefault();
+                    setLayoutDropdownOpen(true);
+                    break;
+                }
+
+                // When layout dropdown is open, Alt+Shift+Digit7/8/9 select option 1/2/3 (camera, default1, default2)
+                case "Digit7":
+                case "Digit8":
+                case "Digit9": {
+                    if (!(event.altKey && event.shiftKey)) break;
+                    if (!layoutDropdownOpen) break;
+                    event.preventDefault();
+                    const mapToIdx = (code: string) => {
+                        // map Digit7->0, Digit8->1, Digit9->2
+                        return parseInt(code.replace("Digit", "")) - 7;
+                    };
+                    const selected = mapToIdx(event.code);
+                    if (selected < 0) break;
+                    // Our combinedNames in header places Camera Only at index 0, defaults/customs after
+                    // So selecting 0..2 maps directly to first three options
+                    handleLayoutSelectIndex(selected);
+                    setLayoutDropdownOpen(false);
                     break;
                 }
 
@@ -598,7 +737,6 @@ export const Operator = (props: {
                     showActive
                     placement="bottom"
                 />
-                <AudioControl remoteStreams={remoteStreams} />
                 <SpeedControl
                     scale={velocityScale}
                     onChange={(newScale: number) => {
@@ -698,30 +836,7 @@ export const Operator = (props: {
 
                     return (
                         <Dropdown
-                            onChange={(idx) => {
-                                if (idx === 0) {
-                                    // Camera Only selected
-                                    layout.current = cameraOnlyLayout;
-                                    props.storageHandler.saveCurrentLayout(
-                                        layout.current
-                                    );
-                                    updateLayout();
-                                } else if (idx <= defaultNames.length) {
-                                    // default (idx - 1)
-                                    globalOptionsProps.loadLayout(
-                                        defaultNames[idx - 1],
-                                        true
-                                    );
-                                } else {
-                                    // custom (idx - 1 - defaultNames.length)
-                                    globalOptionsProps.loadLayout(
-                                        customNames[
-                                            idx - 1 - defaultNames.length
-                                        ],
-                                        false
-                                    );
-                                }
-                            }}
+                            onChange={(idx) => handleLayoutSelectIndex(idx)}
                             selectedIndex={matchedIndex}
                             possibleOptions={combinedNames}
                             placeholderText={
@@ -731,6 +846,8 @@ export const Operator = (props: {
                             }
                             showActive
                             placement="bottom"
+                            open={layoutDropdownOpen}
+                            onOpenChange={setLayoutDropdownOpen}
                         />
                     );
                 })()}
