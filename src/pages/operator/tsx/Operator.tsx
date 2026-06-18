@@ -603,14 +603,74 @@ export const Operator = (props: {
                         FunctionProvider.velocityScale = newScale;
                     }}
                 />
-                {/* Load layout button (opens same modal as sidebar) */}
-                <button
-                    id="load-layout-header-button"
-                    title="Load layout"
-                    onClick={() => setShowLoadLayoutModal(true)}
-                >
-                    Load
-                </button>
+                {/* Load layout dropdown (shows current layout name when matched) */}
+                {(() => {
+                    const defaultNames =
+                        props.storageHandler.getDefaultLayoutNames();
+                    const customNames =
+                        props.storageHandler.getCustomLayoutNames();
+                    const combined = defaultNames.concat(customNames);
+
+                    // Try to find a matching name for the currently loaded layout by
+                    // comparing serialized definitions. If no match, leave undefined so
+                    // the dropdown shows a placeholder.
+                    let matchedIndex: number | undefined = undefined;
+                    try {
+                        const currentJson = JSON.stringify(layout.current);
+                        for (let i = 0; i < defaultNames.length; i++) {
+                            const def = props.storageHandler.loadDefaultLayout(
+                                defaultNames[i] as any
+                            );
+                            if (JSON.stringify(def) === currentJson) {
+                                matchedIndex = i;
+                                break;
+                            }
+                        }
+                        if (matchedIndex === undefined) {
+                            for (let i = 0; i < customNames.length; i++) {
+                                const def =
+                                    props.storageHandler.loadCustomLayout(
+                                        customNames[i]
+                                    );
+                                if (JSON.stringify(def) === currentJson) {
+                                    matchedIndex = defaultNames.length + i;
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // If loading custom layouts throws for some reason, ignore and
+                        // fall back to placeholder behavior.
+                        matchedIndex = undefined;
+                    }
+
+                    return (
+                        <Dropdown
+                            onChange={(idx) => {
+                                if (idx < defaultNames.length) {
+                                    globalOptionsProps.loadLayout(
+                                        defaultNames[idx],
+                                        true
+                                    );
+                                } else {
+                                    globalOptionsProps.loadLayout(
+                                        customNames[idx - defaultNames.length],
+                                        false
+                                    );
+                                }
+                            }}
+                            selectedIndex={matchedIndex}
+                            possibleOptions={combined}
+                            placeholderText={
+                                matchedIndex === undefined
+                                    ? "Current Layout"
+                                    : undefined
+                            }
+                            showActive
+                            placement="bottom"
+                        />
+                    );
+                })()}
                 <CustomizeButton
                     customizing={customizing}
                     onClick={handleToggleCustomize}
