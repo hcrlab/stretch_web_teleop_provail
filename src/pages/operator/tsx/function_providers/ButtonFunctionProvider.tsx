@@ -227,15 +227,14 @@ export class ButtonFunctionProvider extends FunctionProvider {
         switch (buttonPadFunction) {
             case ButtonPadButton.BaseForward:
             case ButtonPadButton.BaseReverse:
-                // Use an incremental joint movement for base step actions so the
-                // distance moved scales with the velocity preset (via
-                // JOINT_INCREMENTS * velocityScale) instead of using a raw
-                // velocity which depends on duration.
-                this.incrementalJointMovement(jointName, increment);
+                // Use velocity-based incremental base drive for step actions so
+                // the base actually moves on systems that expect cmd_vel style
+                // control. Velocity is already scaled by FunctionProvider.velocityScale.
+                this.incrementalBaseDrive(velocity, 0);
                 break;
             case ButtonPadButton.BaseRotateLeft:
             case ButtonPadButton.BaseRotateRight:
-                this.incrementalJointMovement(jointName, increment);
+                this.incrementalBaseDrive(0, velocity);
                 break;
             case ButtonPadButton.CameraTiltUp:
             case ButtonPadButton.CameraTiltDown:
@@ -390,16 +389,14 @@ export class ButtonFunctionProvider extends FunctionProvider {
                 switch (buttonPadFunction) {
                     case ButtonPadButton.BaseForward:
                     case ButtonPadButton.BaseReverse:
-                        // Use joint-based continuous movement so the base responds
-                        // to the velocity preset in the same way as the arm: the
-                        // increment is scaled by the preset and sent repeatedly.
-                        action = () =>
-                            this.continuousJointMovement(jointName, increment);
+                        // Use continuous base drive (cmd_vel style) so the base
+                        // moves continuously while pressed. Velocity is already
+                        // scaled by FunctionProvider.velocityScale.
+                        action = () => this.continuousBaseDrive(velocity, 0);
                         break;
                     case ButtonPadButton.BaseRotateLeft:
                     case ButtonPadButton.BaseRotateRight:
-                        action = () =>
-                            this.continuousJointMovement(jointName, increment);
+                        action = () => this.continuousBaseDrive(0, velocity);
                         break;
 
                     case ButtonPadButton.ArmLower:
