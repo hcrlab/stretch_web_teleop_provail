@@ -1,0 +1,29 @@
+/* Shared resize handle styles for resizable components (ButtonPad, ButtonGrid) */
+
+.component-resize-handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: var(--btn-blue);
+    border: 2px solid white;
+    border-radius: 2px;
+    padding: 0;
+    z-index: 10;
+    touch-action: none;
+}
+
+.component-resize-handle:hover {
+    background: var(--btn-turquoise);
+}
+
+/* Corners */
+.component-resize-handle-tl { top: -5px;            left: -5px;             cursor: nwse-resize; }
+.component-resize-handle-tr { top: -5px;            right: -5px;            cursor: nesw-resize; }
+.component-resize-handle-bl { bottom: -5px;         left: -5px;             cursor: nesw-resize; }
+.component-resize-handle-br { bottom: -5px;         right: -5px;            cursor: nwse-resize; }
+
+/* Edges */
+.component-resize-handle-tc { top: -5px;            left: calc(50% - 5px); cursor: ns-resize;   }
+.component-resize-handle-bc { bottom: -5px;         left: calc(50% - 5px); cursor: ns-resize;   }
+.component-resize-handle-ml { top: calc(50% - 5px); left: -5px;            cursor: ew-resize;   }
+.component-resize-handle-mr { top: calc(50% - 5px); right: -5px;           cursor: ew-resize;   }

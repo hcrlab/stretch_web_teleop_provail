@@ -46,6 +46,7 @@ import {
 import { CheckToggleButton } from "../basic_components/CheckToggleButton";
 import { AccordionSelect } from "../basic_components/AccordionSelect";
 import "operator/css/CameraView.css";
+import { ResizeHandles } from "./ResizeHandles";
 import AddIcon from "@mui/icons-material/Add";
 import CancelIcon from "@mui/icons-material/Cancel";
 import PlayCircleFilledIcon from "@mui/icons-material/PlayCircleFilled";
@@ -58,6 +59,8 @@ import PlayCircleFilledIcon from "@mui/icons-material/PlayCircleFilled";
 export const CameraView = (props: CustomizableComponentProps) => {
     // Reference to the video element
     const videoRef = React.useRef<HTMLVideoElement>(null);
+    const containerRef = React.useRef<HTMLDivElement>(null);
+    const [, forceResizeRender] = React.useState(0);
     // X and Y position of the cursor when user clicks on the video while customizing
     const [contextMenuXY, setContextMenuXY] = React.useState<
         [number, number] | null
@@ -129,6 +132,20 @@ export const CameraView = (props: CustomizableComponentProps) => {
     const videoClass = className("video-canvas", { customizing, selected });
     const realsense = props.definition.id === CameraViewId.realsense;
     const overhead = props.definition.id === CameraViewId.overhead;
+
+    function getCameraSize() {
+        const rect = containerRef.current?.getBoundingClientRect();
+        return {
+            width: definition.width ?? rect?.width ?? 400,
+            height: definition.height ?? rect?.height ?? 300,
+        };
+    }
+
+    function onCameraResize(width: number, height: number) {
+        definition.width = width;
+        definition.height = height;
+        forceResizeRender((v) => v + 1);
+    }
 
     /** Mark this video stream as selected */
     function selectSelf() {
@@ -322,8 +339,18 @@ export const CameraView = (props: CustomizableComponentProps) => {
             ) : undefined}
         </div>
     );
+    const containerStyle: React.CSSProperties =
+        definition.width && definition.height
+            ? { width: `${definition.width}px`, height: `${definition.height}px` }
+            : {};
+
     return (
-        <div className="video-container" draggable={false}>
+        <div
+            ref={containerRef}
+            className="video-container"
+            draggable={false}
+            style={containerStyle}
+        >
             {videoComponent}
             {definition.displayButtons ? (
                 <div className="under-video-area" ref={underVideoAreaRef}>
@@ -344,6 +371,15 @@ export const CameraView = (props: CustomizableComponentProps) => {
             ) : (
                 <></>
             )}
+            {customizing && selected ? (
+                <ResizeHandles
+                    getSize={getCameraSize}
+                    onResize={onCameraResize}
+                    onLayoutChange={props.sharedState.onLayoutChange}
+                    cornersOnly={true}
+                    containerRef={containerRef}
+                />
+            ) : undefined}
         </div>
     );
 };

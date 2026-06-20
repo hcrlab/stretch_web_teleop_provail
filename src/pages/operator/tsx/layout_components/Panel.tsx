@@ -15,6 +15,7 @@ import {
 } from "./CustomizableComponent";
 import "operator/css/Panel.css";
 import AddCircleIcon from "@mui/icons-material/AddCircle";
+import { ResizeHandles } from "./ResizeHandles";
 
 /*
 TODO:
@@ -34,6 +35,7 @@ export const Panel = (props: CustomizableComponentProps) => {
     const [showTabModal, setShowTabModal] = React.useState(false);
     // Incremented when the panel size is changed to force a re-render
     const [, forceResizeRender] = React.useState(0);
+    const containerRef = React.useRef<HTMLDivElement>(null);
 
     const definition = props.definition as PanelDefinition;
     const countChildren = definition.children.length;
@@ -173,118 +175,38 @@ export const Panel = (props: CustomizableComponentProps) => {
         );
     }
 
-    function setPanelFlex(nextFlex: number) {
-        definition.flexGrow = Math.max(0.5, Math.min(8, nextFlex));
-        forceResizeRender((value) => value + 1);
-        props.sharedState.onLayoutChange();
-    }
-    function resetPanelFlex(event: React.MouseEvent<HTMLButtonElement>) {
-        event.preventDefault();
-        event.stopPropagation();
-        delete definition.flexGrow;
-        forceResizeRender((value) => value + 1);
-        props.sharedState.onLayoutChange();
+    function getPanelSize() {
+        const rect = containerRef.current?.getBoundingClientRect();
+        return {
+            width: definition.width ?? rect?.width ?? 400,
+            height: definition.height ?? rect?.height ?? 300,
+        };
     }
 
-    function shrinkPanel(event: React.MouseEvent<HTMLButtonElement>) {
-        event.preventDefault();
-        event.stopPropagation();
-        setPanelFlex(panelFlex - 0.5);
+    function onPanelResize(width: number, height: number) {
+        definition.width = width;
+        definition.height = height;
+        forceResizeRender((v) => v + 1);
     }
-
-    function growPanel(event: React.MouseEvent<HTMLButtonElement>) {
-        event.preventDefault();
-        event.stopPropagation();
-        setPanelFlex(panelFlex + 0.5);
-    }
-
-    function handleResizePointerDown(
-        event: React.PointerEvent<HTMLButtonElement>,
-    ) {
-        if (!props.sharedState.customizing) return;
-
-        event.preventDefault();
-        event.stopPropagation();
-        event.currentTarget.setPointerCapture(event.pointerId);
-
-        const startY = event.clientY;
-        const startX = event.clientX;
-        const startFlex = definition.flexGrow ?? panelFlex;
-        const parent = event.currentTarget.parentElement?.parentElement;
-        const verticalResize =
-            !parent ||
-            window.getComputedStyle(parent).flexDirection.includes("column");
-
-        function handlePointerMove(moveEvent: PointerEvent) {
-            const delta = verticalResize
-                ? moveEvent.clientY - startY
-                : moveEvent.clientX - startX;
-            setPanelFlex(startFlex + delta / 80);
-        }
-
-        function handlePointerUp() {
-            window.removeEventListener("pointermove", handlePointerMove);
-            window.removeEventListener("pointerup", handlePointerUp);
-        }
-
-        window.addEventListener("pointermove", handlePointerMove);
-        window.addEventListener("pointerup", handlePointerUp);
-    }
-
-    function handleResizeKeyDown(
-        event: React.KeyboardEvent<HTMLButtonElement>,
-    ) {
-        if (event.key === "ArrowUp") {
-            event.preventDefault();
-            setPanelFlex(panelFlex - 0.25);
-        } else if (event.key === "ArrowDown") {
-            event.preventDefault();
-            setPanelFlex(panelFlex + 0.25);
-        }
-    }
-
-    const resizeControls = props.sharedState.customizing ? (
-        <div
-            className="panel-resize-controls"
-            aria-label="Panel resize controls"
-            onClick={(event) => event.stopPropagation()}
-        >
-            <button
-                type="button"
-                aria-label="Shrink panel"
-                title="Shrink panel"
-                onClick={shrinkPanel}
-            >
-                -
-            </button>
-            <button
-                type="button"
-                aria-label="Reset panel size"
-                title="Reset panel size"
-                onClick={resetPanelFlex}
-            >
-                Reset
-            </button>
-            <button
-                type="button"
-                aria-label="Grow panel"
-                title="Grow panel"
-                onClick={growPanel}
-            >
-                +
-            </button>
-        </div>
-    ) : undefined;
 
     const thisSelected = childTabSelected === -1;
 
+    // When explicit pixel size is set use it; otherwise fall back to flexGrow
+    const containerStyle: React.CSSProperties = definition.height
+        ? {
+              flex: `0 0 ${definition.height}px`,
+              ...(definition.width ? { width: `${definition.width}px` } : {}),
+          }
+        : { flex: `${panelFlex} ${panelFlex} 0px` };
+
     return (
         <div
+            ref={containerRef}
             className={className("tabs-component", {
                 customizing: props.sharedState.customizing,
                 selected: thisSelected,
             })}
-            style={{ flex: `${panelFlex} ${panelFlex} 0px` }}
+            style={containerStyle}
         >
             <div className="tabs-header">
                 {definition.children.map(mapTabLabels)}
@@ -304,7 +226,6 @@ export const Panel = (props: CustomizableComponentProps) => {
                         </button>
                     ) : undefined
                 }
-                {resizeControls}
             </div>
             <div className="tabs-content" {...selectProp}>
                 <ComponentList {...componentListProps} />
@@ -314,14 +235,12 @@ export const Panel = (props: CustomizableComponentProps) => {
                 setShow={setShowTabModal}
                 addTab={addTab}
             />
-            {props.sharedState.customizing ? (
-                <button
-                    type="button"
-                    className="panel-resize-handle"
-                    aria-label="Resize panel"
-                    tabIndex={0}
-                    onPointerDown={handleResizePointerDown}
-                    onKeyDown={handleResizeKeyDown}
+            {props.sharedState.customizing && thisSelected ? (
+                <ResizeHandles
+                    getSize={getPanelSize}
+                    onResize={onPanelResize}
+                    onLayoutChange={props.sharedState.onLayoutChange}
+                    containerRef={containerRef}
                 />
             ) : undefined}
         </div>

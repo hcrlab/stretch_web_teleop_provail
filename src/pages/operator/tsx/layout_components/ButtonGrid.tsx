@@ -1,3 +1,4 @@
+import React from "react";
 import { buttonFunctionProvider } from "operator/tsx/index";
 import {
     ButtonFunctions,
@@ -8,8 +9,10 @@ import {
     CustomizableComponentProps,
     isSelected,
 } from "./CustomizableComponent";
+import { ButtonGridDefinition } from "../utils/component_definitions";
 import { className } from "shared/util";
 import "operator/css/ButtonGrid.css";
+import { ResizeHandles } from "./ResizeHandles";
 
 const BUTTON_NAMES = [
     "Forward",
@@ -74,16 +77,41 @@ for (let i = 0; i < 4; i++) {
 }
 
 export const ButtonGrid = (props: CustomizableComponentProps) => {
+    const containerRef = React.useRef<HTMLDivElement>(null);
+    const [, forceResizeRender] = React.useState(0);
     const { customizing } = props.sharedState;
     const selected = isSelected(props);
+    const definition = props.definition as ButtonGridDefinition;
+
+    function getSize() {
+        const rect = containerRef.current?.getBoundingClientRect();
+        return {
+            width: definition.width ?? rect?.width ?? 400,
+            height: definition.height ?? rect?.height ?? 300,
+        };
+    }
+
+    function onResize(width: number, height: number) {
+        definition.width = width;
+        definition.height = height;
+        forceResizeRender((v) => v + 1);
+    }
+
     function handleSelect(event: React.MouseEvent<HTMLDivElement>) {
         event.stopPropagation();
         props.sharedState.onSelect(props.definition, props.path);
     }
+
+    const containerStyle: React.CSSProperties = definition.width
+        ? { flex: `0 0 ${definition.width}px`, height: `${definition.height ?? 300}px` }
+        : { flex: "1 1 0", ...(definition.height ? { height: `${definition.height}px` } : {}) };
+
     return (
         <div
+            ref={containerRef}
             className={className("button-grid", { selected, customizing })}
             onClick={handleSelect}
+            style={containerStyle}
         >
             {BACKGROUND_COLORS}
             {HEADER_NAMES.map((headerName, idx) => (
@@ -116,6 +144,14 @@ export const ButtonGrid = (props: CustomizableComponentProps) => {
                     </button>
                 );
             })}
+            {customizing && selected ? (
+                <ResizeHandles
+                    getSize={getSize}
+                    onResize={onResize}
+                    onLayoutChange={props.sharedState.onLayoutChange}
+                    containerRef={containerRef}
+                />
+            ) : undefined}
         </div>
     );
 };
