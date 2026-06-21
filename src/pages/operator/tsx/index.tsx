@@ -445,7 +445,9 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
  * @param storageHandler the storage handler
  */
 function renderOperator(storageHandler: StorageHandler) {
-    const requestedLayoutInput = new URL(window.location.href).searchParams.get("view");
+    const url = new URL(window.location.href);
+    const requestedLayoutInput = url.searchParams.get("view");
+    const customizationEnabled = url.searchParams.get("customization")?.toLowerCase() !== "false";
     const requestedLayoutName = requestedLayoutInput?.replace(/-/g, " ");
     const requestedLayout = requestedLayoutName
         ? storageHandler.loadLayout(requestedLayoutName) 
@@ -453,12 +455,15 @@ function renderOperator(storageHandler: StorageHandler) {
     const layout = requestedLayout || storageHandler.loadCurrentLayoutOrDefault();
     FunctionProvider.initialize(DEFAULT_VELOCITY_SCALE, layout.actionMode);
 
+
+
     !isMobile
         ? root.render(
               <Operator
                   remoteStreams={allRemoteStreams}
                   layout={layout}
                   storageHandler={storageHandler}
+                  customizationEnabled={customizationEnabled}
               />,
           )
         : root.render(

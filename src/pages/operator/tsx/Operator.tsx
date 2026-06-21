@@ -151,6 +151,7 @@ export const Operator = (props: {
     remoteStreams: Map<string, RemoteStream>;
     layout: LayoutDefinition;
     storageHandler: StorageHandler;
+    customizationEnabled: boolean;
 }) => {
     const [customizing, setCustomizing] = React.useState(false);
     const [selectedPath, setSelectedPath] = React.useState<string | undefined>(
@@ -280,6 +281,9 @@ export const Operator = (props: {
             switch (event.code) {
                 // Toggle customization mode
                 case "KeyC":
+                    if (!props.customizationEnabled) {
+                        break;
+                    }
                     event.preventDefault();
                     handleToggleCustomize();
                     break;
@@ -681,6 +685,9 @@ export const Operator = (props: {
      * Callback when the customization button is clicked.
      */
     const handleToggleCustomize = () => {
+        if (!props.customizationEnabled) {
+            return;
+        }
         if (customizing) {
             console.log("saving layout");
             props.storageHandler.saveCurrentLayout(layout.current);
@@ -833,11 +840,13 @@ export const Operator = (props: {
                         />
                     );
                 })()}
-                <CustomizeButton
-                    customizing={customizing}
-                    onClick={handleToggleCustomize}
-                    showText={false}
-                />
+                {props.customizationEnabled && (
+                    <CustomizeButton
+                        customizing={customizing}
+                        onClick={handleToggleCustomize}
+                        showText={false}
+                    />
+                )}
             </div>
             <LoadLayoutModal
                 defaultLayouts={Object.keys(DEFAULT_LAYOUTS)}
@@ -949,15 +958,17 @@ export const Operator = (props: {
             <div id="operator-body">
                 <LayoutArea layout={layout.current} sharedState={sharedState} />
             </div>
-            <Sidebar
-                hidden={!customizing}
-                onDelete={handleDelete}
-                updateLayout={updateLayout}
-                onSelect={handleSelect}
-                selectedDefinition={selectedDefinition}
-                selectedPath={selectedPath}
-                globalOptionsProps={globalOptionsProps}
-            />
+            {props.customizationEnabled && (
+                <Sidebar
+                    hidden={!customizing}
+                    onDelete={handleDelete}
+                    updateLayout={updateLayout}
+                    onSelect={handleSelect}
+                    selectedDefinition={selectedDefinition}
+                    selectedPath={selectedPath}
+                    globalOptionsProps={globalOptionsProps}
+                />
+            )}
         </div>
     );
 };
