@@ -196,58 +196,18 @@ export const Operator = (props: {
     const [layoutDropdownOpen, setLayoutDropdownOpen] =
         React.useState<boolean>(false);
 
-    // Helper to programmatically select the header layout index (0 = Camera Only, 1.. = defaults/customs)
+    // Helper to programmatically select the header layout index
     function handleLayoutSelectIndex(idx: number) {
         const defaultNames = props.storageHandler.getDefaultLayoutNames();
         const customNames = props.storageHandler.getCustomLayoutNames();
-        if (idx === 0) {
-            // Camera Only selection: recreate camera-only layout and apply
-            const cameraOnlyLayout: LayoutDefinition = {
-                type: ComponentType.Layout,
-                displayMovementRecorder: false,
-                displayTextToSpeech: false,
-                displayLabels: true,
-                actionMode: layout.current.actionMode,
-                children: [
-                    {
-                        type: ComponentType.LayoutGrid,
-                        children: [
-                            {
-                                type: ComponentType.Panel,
-                                children: [
-                                    {
-                                        type: ComponentType.SingleTab,
-                                        label: "Camera",
-                                        children: [
-                                            {
-                                                type: ComponentType.CameraView,
-                                                id: CameraViewId.realsense,
-                                                displayButtons: true,
-                                                children: [],
-                                            } as any,
-                                        ],
-                                    },
-                                ],
-                            },
-                        ],
-                    },
-                ],
-            };
-            layout.current = cameraOnlyLayout;
-            props.storageHandler.saveCurrentLayout(layout.current);
-            updateLayout();
-            return;
-        }
-
-        // defaults are offset by 1
-        if (idx <= defaultNames.length) {
-            globalOptionsProps.loadLayout(defaultNames[idx - 1], true);
+        if (idx < defaultNames.length) {
+            globalOptionsProps.loadLayout(defaultNames[idx], true);
             return;
         }
 
         // custom
         globalOptionsProps.loadLayout(
-            customNames[idx - 1 - defaultNames.length],
+            customNames[idx - defaultNames.length],
             false
         );
     }
@@ -462,8 +422,6 @@ export const Operator = (props: {
                     };
                     const selected = mapToIdx(event.code);
                     if (selected < 0) break;
-                    // Our combinedNames in header places Camera Only at index 0, defaults/customs after
-                    // So selecting 0..2 maps directly to first three options
                     handleLayoutSelectIndex(selected);
                     setLayoutDropdownOpen(false);
                     break;
@@ -780,6 +738,11 @@ export const Operator = (props: {
             updateLayout();
         },
         saveLayout: (layoutName: string) => {
+            if (props.storageHandler.getDefaultLayoutNames().includes(layoutName)) {
+                console.error(`Cannot overwrite default layout "${layoutName}". ` +
+                    `Please choose a different name.`);
+                return;
+            }
             props.storageHandler.saveCustomLayout(layout.current, layoutName);
         },
     };
@@ -813,44 +776,7 @@ export const Operator = (props: {
                         props.storageHandler.getDefaultLayoutNames();
                     const customNames =
                         props.storageHandler.getCustomLayoutNames();
-
-                    // Create a camera-only layout that will occupy the whole page.
-                    const cameraOnlyLayout: LayoutDefinition = {
-                        type: ComponentType.Layout,
-                        displayMovementRecorder: false,
-                        displayTextToSpeech: false,
-                        displayLabels: true,
-                        actionMode: layout.current.actionMode,
-                        children: [
-                            {
-                                type: ComponentType.LayoutGrid,
-                                children: [
-                                    {
-                                        type: ComponentType.Panel,
-                                        children: [
-                                            {
-                                                type: ComponentType.SingleTab,
-                                                label: "Camera",
-                                                children: [
-                                                    {
-                                                        type: ComponentType.CameraView,
-                                                        id: CameraViewId.realsense,
-                                                        displayButtons: true,
-                                                        children: [],
-                                                    } as CameraViewDefinition,
-                                                ],
-                                            },
-                                        ],
-                                    },
-                                ],
-                            },
-                        ],
-                    };
-
-                    // Combined options: Camera Only first, then defaults and customs.
-                    const combinedNames = ["Camera Only"].concat(
-                        defaultNames.concat(customNames)
-                    );
+                    const combinedNames = defaultNames.concat(customNames);
 
                     // Try to find a matching name for the currently loaded layout by
                     // comparing serialized definitions. If no match, leave undefined so
@@ -859,22 +785,15 @@ export const Operator = (props: {
                     try {
                         const currentJson = JSON.stringify(layout.current);
 
-                        // Check camera-only first
-                        if (JSON.stringify(cameraOnlyLayout) === currentJson) {
-                            matchedIndex = 0;
-                        }
-
                         // Check defaults
-                        if (matchedIndex === undefined) {
-                            for (let i = 0; i < defaultNames.length; i++) {
-                                const def =
-                                    props.storageHandler.loadDefaultLayout(
-                                        defaultNames[i] as any
-                                    );
-                                if (JSON.stringify(def) === currentJson) {
-                                    matchedIndex = 1 + i; // +1 for Camera Only
-                                    break;
-                                }
+                        for (let i = 0; i < defaultNames.length; i++) {
+                            const def =
+                                props.storageHandler.loadDefaultLayout(
+                                    defaultNames[i] as any
+                                );
+                            if (JSON.stringify(def) === currentJson) {
+                                matchedIndex = i;
+                                break;
                             }
                         }
 
@@ -886,7 +805,7 @@ export const Operator = (props: {
                                         customNames[i]
                                     );
                                 if (JSON.stringify(def) === currentJson) {
-                                    matchedIndex = 1 + defaultNames.length + i;
+                                    matchedIndex = defaultNames.length + i;
                                     break;
                                 }
                             }

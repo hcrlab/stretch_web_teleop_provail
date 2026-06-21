@@ -445,7 +445,12 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
  * @param storageHandler the storage handler
  */
 function renderOperator(storageHandler: StorageHandler) {
-    const layout = storageHandler.loadCurrentLayoutOrDefault();
+    const requestedLayoutInput = new URL(window.location.href).searchParams.get("view");
+    const requestedLayoutName = requestedLayoutInput?.replace(/-/g, " ");
+    const requestedLayout = requestedLayoutName
+        ? storageHandler.loadLayout(requestedLayoutName) 
+        : null;
+    const layout = requestedLayout || storageHandler.loadCurrentLayoutOrDefault();
     FunctionProvider.initialize(DEFAULT_VELOCITY_SCALE, layout.actionMode);
 
     !isMobile
