@@ -269,7 +269,6 @@ const SaveLayoutModal = (props: {
     function handleAccept() {
         if (name.length > 0) {
             props.saveLayout(name);
-            props.customLayouts.push(name);
         }
         setName("");
     }
