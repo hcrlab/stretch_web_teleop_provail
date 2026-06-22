@@ -95,34 +95,6 @@
     color: var(--font-white);
 }
 
-.panel-resize-handle {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -0.5rem;
-    height: 1rem;
-    border: none;
-    padding: 0;
-    cursor: ns-resize;
-    background: transparent;
-    z-index: 3;
-}
-
-.panel-resize-handle::after {
-    content: "";
-    display: block;
-    width: 4rem;
-    height: 0.35rem;
-    margin: 0.32rem auto;
-    border-radius: 999px;
-    background: var(--selected-color);
-}
-
-.panel-resize-handle:focus-visible {
-    outline: 3px solid var(--selected-color);
-    outline-offset: 2px;
-}
-
 /* Popup for adding a new tab *************************************************/
 
 @media (max-width: 900px) {

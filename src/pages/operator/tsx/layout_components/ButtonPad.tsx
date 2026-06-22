@@ -24,6 +24,7 @@ import {
 } from "../function_providers/ButtonFunctionProvider";
 import { isMobile } from "react-device-detect";
 import "operator/css/ButtonPad.css";
+import { ResizeHandles } from "./ResizeHandles";
 
 /** Properties for {@link ButtonPad} */
 type ButtonPadProps = CustomizableComponentProps & {
@@ -53,6 +54,8 @@ const notHomedDisabledFunctions = new Set<ButtonPadButton>([
 export const ButtonPad = (props: ButtonPadProps) => {
     /** Reference to the SVG which makes up the button pad */
     const svgRef = React.useRef<SVGSVGElement>(null);
+    const containerRef = React.useRef<HTMLDivElement>(null);
+    const [, forceResizeRender] = React.useState(0);
     /** List of path shapes for each button on the button pad */
     const definition = props.definition as ButtonPadDefinition;
     const id: ButtonPadId = definition.id;
@@ -83,6 +86,20 @@ export const ButtonPad = (props: ButtonPadProps) => {
         return <SingleButton {...buttonProps} key={i} />;
     }
 
+    function getSize() {
+        const rect = containerRef.current?.getBoundingClientRect();
+        return {
+            width: definition.width ?? rect?.width ?? 200,
+            height: definition.height ?? rect?.height ?? 300,
+        };
+    }
+
+    function onResize(width: number, height: number) {
+        definition.width = width;
+        definition.height = height;
+        forceResizeRender((v) => v + 1);
+    }
+
     /** Callback when SVG is clicked during customize mode */
     const onSelect = (event: React.MouseEvent<SVGSVGElement>) => {
         // Make sure the container of the button pad doesn't get selected
@@ -99,8 +116,12 @@ export const ButtonPad = (props: ButtonPadProps) => {
             }
             : {};
 
+    const containerStyle: React.CSSProperties = definition.width
+        ? { flex: `0 0 ${definition.width}px`, height: `${definition.height ?? 300}px` }
+        : { flex: "1 1 0", ...(definition.height ? { height: `${definition.height}px` } : {}) };
+
     return (
-        <div className="button-pad">
+        <div className="button-pad" ref={containerRef} style={containerStyle}>
             {/* {!overlay && !isMobile? <h4 className="title">{id}</h4> : <></>} */}
             <svg
                 ref={svgRef}
@@ -118,6 +139,14 @@ export const ButtonPad = (props: ButtonPadProps) => {
             >
                 {paths.map(mapPaths)}
             </svg>
+            {customizing && !overlay && selected ? (
+                <ResizeHandles
+                    getSize={getSize}
+                    onResize={onResize}
+                    onLayoutChange={props.sharedState.onLayoutChange}
+                    containerRef={containerRef}
+                />
+            ) : undefined}
         </div>
     );
 };
