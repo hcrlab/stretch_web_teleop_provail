@@ -2,6 +2,8 @@ import {
     ButtonFunctionProvider,
     ButtonPadButton,
 } from "./ButtonFunctionProvider";
+import { JOINT_VELOCITIES } from "shared/util";
+import { FunctionProvider } from "./FunctionProvider";
 
 /** Maps WASD keys to the base driving button pad buttons */
 const BASE_DRIVE_KEY_MAP: Record<string, ButtonPadButton> = {
@@ -30,6 +32,52 @@ export class KeyboardFunctionProvider extends ButtonFunctionProvider {
      */
     public provideKeyboardShortcut(button: ButtonPadButton): () => void {
         return () => this.pressButtonOnce(button);
+    }
+
+    public startKeyboardShortcut(button: ButtonPadButton): void {
+        switch (button) {
+            case ButtonPadButton.BaseForward:
+                this.continuousBaseDrive(
+                    JOINT_VELOCITIES.translate_mobile_base *
+                        FunctionProvider.velocityScale,
+                    0
+                );
+                break;
+            case ButtonPadButton.BaseReverse:
+                this.continuousBaseDrive(
+                    -JOINT_VELOCITIES.translate_mobile_base *
+                        FunctionProvider.velocityScale,
+                    0
+                );
+                break;
+            case ButtonPadButton.BaseRotateLeft:
+                this.continuousBaseDrive(
+                    0,
+                    JOINT_VELOCITIES.rotate_mobile_base *
+                        FunctionProvider.velocityScale
+                );
+                break;
+            case ButtonPadButton.BaseRotateRight:
+                this.continuousBaseDrive(
+                    0,
+                    -JOINT_VELOCITIES.rotate_mobile_base *
+                        FunctionProvider.velocityScale
+                );
+                break;
+            default:
+                this.pressButtonOnce(button);
+        }
+    }
+
+    public stopKeyboardShortcut(button: ButtonPadButton): void {
+        switch (button) {
+            case ButtonPadButton.BaseForward:
+            case ButtonPadButton.BaseReverse:
+            case ButtonPadButton.BaseRotateLeft:
+            case ButtonPadButton.BaseRotateRight:
+                this.stopCurrentAction(true);
+                break;
+        }
     }
     /** Starts listening for WASD keys to drive the base. */
     public enableBaseDrivingShortcuts() {

@@ -54,20 +54,20 @@ const KEYBOARD_SHORTCUTS: Record<string, ButtonPadButton> = {
     KeyA: ButtonPadButton.BaseRotateLeft,
     KeyD: ButtonPadButton.BaseRotateRight,
 
-    KeyI: ButtonPadButton.ArmLift,
-    KeyK: ButtonPadButton.ArmLower,
-    KeyL: ButtonPadButton.ArmExtend,
-    KeyJ: ButtonPadButton.ArmRetract,
+    KeyU: ButtonPadButton.ArmLift,
+    KeyJ: ButtonPadButton.ArmLower,
+    KeyI: ButtonPadButton.ArmExtend,
+    KeyK: ButtonPadButton.ArmRetract,
 
-    KeyT: ButtonPadButton.GripperOpen,
-    KeyG: ButtonPadButton.GripperClose,
+    KeyO: ButtonPadButton.GripperOpen,
+    KeyL: ButtonPadButton.GripperClose,
 
-    KeyU: ButtonPadButton.WristPitchUp,
-    KeyO: ButtonPadButton.WristPitchDown,
-    KeyY: ButtonPadButton.WristRotateOut,
-    KeyH: ButtonPadButton.WristRotateIn,
-    KeyR: ButtonPadButton.WristRollLeft,
-    KeyF: ButtonPadButton.WristRollRight,
+    KeyT: ButtonPadButton.WristPitchUp,
+    KeyG: ButtonPadButton.WristPitchDown,
+    KeyH: ButtonPadButton.WristRotateOut,
+    KeyY: ButtonPadButton.WristRotateIn,
+    KeyF: ButtonPadButton.WristRollLeft,
+    KeyR: ButtonPadButton.WristRollRight,
 
     ArrowUp: ButtonPadButton.CameraTiltUp,
     ArrowDown: ButtonPadButton.CameraTiltDown,
@@ -84,6 +84,13 @@ const NOT_HOMED_DISABLED_SHORTCUTS = new Set<ButtonPadButton>([
     ButtonPadButton.WristRotateOut,
     ButtonPadButton.GripperOpen,
     ButtonPadButton.GripperClose,
+]);
+
+const BASE_DRIVE_SHORTCUTS = new Set<ButtonPadButton>([
+    ButtonPadButton.BaseForward,
+    ButtonPadButton.BaseReverse,
+    ButtonPadButton.BaseRotateLeft,
+    ButtonPadButton.BaseRotateRight,
 ]);
 
 const ALT_SHORTCUT_LAYER_KEY = "Digit2";
@@ -182,13 +189,15 @@ export const Operator = (props: {
     const [showTabletState, setShowTabletState] = React.useState<
         ActionState | undefined
     >(undefined);
-    const [robotNotHomed, setRobotNotHomed] = React.useState<boolean>(false);
+    const [robotNotHomed, setRobotNotHomed] = React.useState<boolean>(true);
     function showHomeTheRobotGlobalControl(isHomed: boolean) {
         setRobotNotHomed(!isHomed);
     }
-    homeTheRobotFunctionProvider.setIsHomedCallback(
-        showHomeTheRobotGlobalControl
-    );
+    React.useEffect(() => {
+        homeTheRobotFunctionProvider.setIsHomedCallback(
+            showHomeTheRobotGlobalControl
+        );
+    }, []);
 
     const [showLoadLayoutModal, setShowLoadLayoutModal] =
         React.useState<boolean>(false);
@@ -242,18 +251,29 @@ export const Operator = (props: {
             if (shouldIgnoreShortcut(event, pressedKeys)) return;
 
             // First, handle robot-control keys (button pad shortcuts).
-            // Require Shift+Alt to activate these so they don't trigger
-            // accidentally while typing or using other UI keys.
             const button = KEYBOARD_SHORTCUTS[event.code];
             if (button) {
-                if (!(event.shiftKey && event.altKey)) return;
+                const isModifiedShortcut = event.shiftKey && event.altKey;
+                if (!BASE_DRIVE_SHORTCUTS.has(button) && !isModifiedShortcut) {
+                    return;
+                }
+
+                if (
+                    BASE_DRIVE_SHORTCUTS.has(button) &&
+                    event.altKey &&
+                    !isModifiedShortcut
+                ) {
+                    return;
+                }
 
                 if (robotNotHomed && NOT_HOMED_DISABLED_SHORTCUTS.has(button)) {
                     return;
                 }
 
                 event.preventDefault();
-                keyboardFunctionProvider.provideKeyboardShortcut(button)();
+                if (!event.repeat) {
+                    keyboardFunctionProvider.startKeyboardShortcut(button);
+                }
                 return;
             }
 
@@ -458,10 +478,18 @@ export const Operator = (props: {
         }
 
         function handleKeyUp(event: KeyboardEvent) {
+            const button = KEYBOARD_SHORTCUTS[event.code];
+            if (button) {
+                keyboardFunctionProvider.stopKeyboardShortcut(button);
+            }
             pressedKeys.delete(event.code);
         }
 
         function handleBlur() {
+            KEYBOARD_SHORTCUTS &&
+                Object.values(KEYBOARD_SHORTCUTS).forEach((button) =>
+                    keyboardFunctionProvider.stopKeyboardShortcut(button)
+                );
             pressedKeys.clear();
         }
 
@@ -745,9 +773,15 @@ export const Operator = (props: {
             updateLayout();
         },
         saveLayout: (layoutName: string) => {
-            if (props.storageHandler.getDefaultLayoutNames().includes(layoutName)) {
-                console.error(`Cannot overwrite default layout "${layoutName}". ` +
-                    `Please choose a different name.`);
+            if (
+                props.storageHandler
+                    .getDefaultLayoutNames()
+                    .includes(layoutName)
+            ) {
+                console.error(
+                    `Cannot overwrite default layout "${layoutName}". ` +
+                        `Please choose a different name.`
+                );
                 return;
             }
             props.storageHandler.saveCustomLayout(layout.current, layoutName);
@@ -794,10 +828,9 @@ export const Operator = (props: {
 
                         // Check defaults
                         for (let i = 0; i < defaultNames.length; i++) {
-                            const def =
-                                props.storageHandler.loadDefaultLayout(
-                                    defaultNames[i] as any
-                                );
+                            const def = props.storageHandler.loadDefaultLayout(
+                                defaultNames[i] as any
+                            );
                             if (JSON.stringify(def) === currentJson) {
                                 matchedIndex = i;
                                 break;
@@ -871,7 +904,7 @@ export const Operator = (props: {
                     </div>
                 </div>
             )}
-            {
+            {buttonCollision.length > 0 && (
                 <div className="operator-collision-alerts">
                     <div
                         className={className("operator-alert", {
@@ -889,7 +922,7 @@ export const Operator = (props: {
                         </Alert>
                     </div>
                 </div>
-            }
+            )}
             {moveBaseState && (
                 <div className="operator-collision-alerts">
                     <div
