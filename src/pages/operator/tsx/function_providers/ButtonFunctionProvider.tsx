@@ -68,6 +68,20 @@ const BASE_STEP_MIN_MULTIPLIER = 0.5;
 const BASE_STEP_MAX_MULTIPLIER = BASE_STEP_MEDIUM_MULTIPLIER * 0.7;
 const BASE_STEP_TRANSLATION_M = 0.05;
 const BASE_STEP_ROTATION_RAD = 0.15;
+const MANIPULATOR_STEP_REFERENCE_SCALE = 0.8;
+
+const speedScaledStepButtons = new Set<ButtonPadButton>([
+    ButtonPadButton.ArmLift,
+    ButtonPadButton.ArmLower,
+    ButtonPadButton.ArmExtend,
+    ButtonPadButton.ArmRetract,
+    ButtonPadButton.WristRotateIn,
+    ButtonPadButton.WristRotateOut,
+    ButtonPadButton.WristPitchUp,
+    ButtonPadButton.WristPitchDown,
+    ButtonPadButton.WristRollLeft,
+    ButtonPadButton.WristRollRight,
+]);
 
 function getBaseStepScale(velocityScale = FunctionProvider.velocityScale): number {
     const minScale = BASE_STEP_SLOWEST_SCALE;
@@ -90,6 +104,12 @@ function getBaseStepTranslationTarget(velocityScale?: number): number {
 
 function getBaseStepRotationTarget(velocityScale?: number): number {
     return BASE_STEP_ROTATION_RAD * getBaseStepScale(velocityScale);
+}
+
+function getManipulatorStepScale(buttonPadFunction: ButtonPadButton): number {
+    return speedScaledStepButtons.has(buttonPadFunction)
+        ? FunctionProvider.velocityScale / MANIPULATOR_STEP_REFERENCE_SCALE
+        : 1;
 }
 
 /** Functions called when the user interacts with a button. */
@@ -269,7 +289,9 @@ export class ButtonFunctionProvider extends FunctionProvider {
         const increment =
             multiplier *
             JOINT_INCREMENTS[jointName]! *
-            (isBaseJoint ? FunctionProvider.velocityScale : 1);
+            (isBaseJoint
+                ? FunctionProvider.velocityScale
+                : getManipulatorStepScale(buttonPadFunction));
 
         switch (buttonPadFunction) {
             case ButtonPadButton.BaseForward:
@@ -390,7 +412,9 @@ export class ButtonFunctionProvider extends FunctionProvider {
         const increment =
             multiplier *
             JOINT_INCREMENTS[jointName]! *
-            (isBaseJoint ? FunctionProvider.velocityScale : 1);
+            (isBaseJoint
+                ? FunctionProvider.velocityScale
+                : getManipulatorStepScale(buttonPadFunction));
 
         switch (FunctionProvider.actionMode) {
             case ActionMode.StepActions:
