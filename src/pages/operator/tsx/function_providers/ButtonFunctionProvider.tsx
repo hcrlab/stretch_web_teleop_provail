@@ -56,6 +56,42 @@ const negativeButtonPadFunctions = new Set<ButtonPadButton>([
     ButtonPadButton.CameraPanRight,
 ]);
 
+const BASE_STEP_REFERENCE_SCALE = 0.8;
+const BASE_STEP_SLOWEST_SCALE = 0.2;
+const BASE_STEP_FASTEST_SCALE = 1.6;
+const BASE_STEP_DURATION_MS = 250;
+const BASE_STEP_MEDIUM_MULTIPLIER = 1 +
+    ((BASE_STEP_REFERENCE_SCALE - BASE_STEP_SLOWEST_SCALE) /
+        (BASE_STEP_FASTEST_SCALE - BASE_STEP_SLOWEST_SCALE)) *
+        9;
+const BASE_STEP_MIN_MULTIPLIER = 0.5;
+const BASE_STEP_MAX_MULTIPLIER = BASE_STEP_MEDIUM_MULTIPLIER * 0.7;
+const BASE_STEP_TRANSLATION_M = 0.05;
+const BASE_STEP_ROTATION_RAD = 0.15;
+
+function getBaseStepScale(velocityScale = FunctionProvider.velocityScale): number {
+    const minScale = BASE_STEP_SLOWEST_SCALE;
+    const maxScale = BASE_STEP_FASTEST_SCALE;
+    const normalized = (velocityScale - minScale) / (maxScale - minScale);
+    return (
+        BASE_STEP_MIN_MULTIPLIER +
+        Math.max(0, Math.min(1, normalized)) *
+            (BASE_STEP_MAX_MULTIPLIER - BASE_STEP_MIN_MULTIPLIER)
+    );
+}
+
+function getBaseStepDurationMs(velocityScale?: number): number {
+    return BASE_STEP_DURATION_MS * getBaseStepScale(velocityScale);
+}
+
+function getBaseStepTranslationTarget(velocityScale?: number): number {
+    return BASE_STEP_TRANSLATION_M * getBaseStepScale(velocityScale);
+}
+
+function getBaseStepRotationTarget(velocityScale?: number): number {
+    return BASE_STEP_ROTATION_RAD * getBaseStepScale(velocityScale);
+}
+
 /** Functions called when the user interacts with a button. */
 export type ButtonFunctions = {
     onClick: () => void;
@@ -201,7 +237,10 @@ export class ButtonFunctionProvider extends FunctionProvider {
      *
      * @param buttonPadFunction the {@link ButtonPadButton} to execute once
      */
-    public pressButtonOnce(buttonPadFunction: ButtonPadButton) {
+    public pressButtonOnce(
+        buttonPadFunction: ButtonPadButton,
+        velocityScaleOverride?: number
+    ) {
         const jointName: ValidJoints =
             getJointNameFromButtonFunction(buttonPadFunction);
         const multiplier: number = negativeButtonPadFunctions.has(
@@ -219,6 +258,11 @@ export class ButtonFunctionProvider extends FunctionProvider {
             multiplier *
             JOINT_VELOCITIES[jointName]! *
             FunctionProvider.velocityScale;
+        const baseStepVelocity =
+            multiplier *
+            JOINT_VELOCITIES[jointName]! *
+            BASE_STEP_REFERENCE_SCALE *
+            getBaseStepScale(velocityScaleOverride);
 
         // Step increments for the base should also scale with velocityScale so
         // pressing a step moves farther at higher speed presets.
@@ -230,13 +274,21 @@ export class ButtonFunctionProvider extends FunctionProvider {
         switch (buttonPadFunction) {
             case ButtonPadButton.BaseForward:
             case ButtonPadButton.BaseReverse:
-                // Use an incremental joint movement for base step actions so the
-                // distance moved scales with the velocity preset.
-                this.incrementalJointMovement(jointName, increment);
+                this.pulseBaseDrive(
+                    baseStepVelocity,
+                    0,
+                    getBaseStepDurationMs(velocityScaleOverride),
+                    getBaseStepTranslationTarget(velocityScaleOverride)
+                );
                 break;
             case ButtonPadButton.BaseRotateLeft:
             case ButtonPadButton.BaseRotateRight:
-                this.incrementalJointMovement(jointName, increment);
+                this.pulseBaseDrive(
+                    0,
+                    baseStepVelocity,
+                    getBaseStepDurationMs(velocityScaleOverride),
+                    getBaseStepRotationTarget(velocityScaleOverride)
+                );
                 break;
             case ButtonPadButton.CameraTiltUp:
             case ButtonPadButton.CameraTiltDown:
@@ -329,6 +381,11 @@ export class ButtonFunctionProvider extends FunctionProvider {
             multiplier *
             JOINT_VELOCITIES[jointName]! *
             FunctionProvider.velocityScale;
+        const baseStepVelocity =
+            multiplier *
+            JOINT_VELOCITIES[jointName]! *
+            BASE_STEP_REFERENCE_SCALE *
+            getBaseStepScale();
 
         const increment =
             multiplier *
@@ -341,12 +398,22 @@ export class ButtonFunctionProvider extends FunctionProvider {
                     case ButtonPadButton.BaseForward:
                     case ButtonPadButton.BaseReverse:
                         action = () =>
-                            this.incrementalJointMovement(jointName, increment);
+                            this.pulseBaseDrive(
+                                baseStepVelocity,
+                                0,
+                                getBaseStepDurationMs(),
+                                getBaseStepTranslationTarget()
+                            );
                         break;
                     case ButtonPadButton.BaseRotateLeft:
                     case ButtonPadButton.BaseRotateRight:
                         action = () =>
-                            this.incrementalJointMovement(jointName, increment);
+                            this.pulseBaseDrive(
+                                0,
+                                baseStepVelocity,
+                                getBaseStepDurationMs(),
+                                getBaseStepRotationTarget()
+                            );
                         break;
                     case ButtonPadButton.ArmLower:
                     case ButtonPadButton.ArmLift:

@@ -46,7 +46,12 @@ http://localhost:8080/operator?mock=1
 Keyboard shortcuts:
 
 - Open browser devtools.
-- Press `W`, `A`, `S`, or `D`.
+- Press `Ctrl+Shift+Alt+W/A/S/D` for base motion.
+- Press `Ctrl+Shift+Alt+Z/C` for forward/backward base motion one speed level higher.
+- Press `Space` or `Shift+Alt+X` to stop motion.
+- Press `Shift+Alt+U/J/I/K/O/L/Y/H/T/G/F/R` for lift, arm, gripper, and wrist motion.
+- Press `Shift+Alt+ArrowUp/ArrowDown/ArrowLeft/ArrowRight` for camera tilt/pan.
+- Press `Shift+Alt+-` or `Shift+Alt+=` to adjust speed.
 - Confirm a `[mock robot command]` log appears.
 - Confirm shortcuts do not fire while the cursor is inside a text input.
 

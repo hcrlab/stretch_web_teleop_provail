@@ -2,8 +2,6 @@ import {
     ButtonFunctionProvider,
     ButtonPadButton,
 } from "./ButtonFunctionProvider";
-import { JOINT_VELOCITIES } from "shared/util";
-import { FunctionProvider } from "./FunctionProvider";
 
 /** Maps WASD keys to the base driving button pad buttons */
 const BASE_DRIVE_KEY_MAP: Record<string, ButtonPadButton> = {
@@ -13,12 +11,8 @@ const BASE_DRIVE_KEY_MAP: Record<string, ButtonPadButton> = {
     d: ButtonPadButton.BaseRotateRight,
 };
 
-/** How often (ms) to repeat the step while a key is held down */
-const REPEAT_INTERVAL_MS = 150;
-
 export class KeyboardFunctionProvider extends ButtonFunctionProvider {
     private keysPressed = new Set<string>();
-    private repeatIntervalId?: ReturnType<typeof setInterval>;
 
     constructor() {
         super();
@@ -34,35 +28,16 @@ export class KeyboardFunctionProvider extends ButtonFunctionProvider {
         return () => this.pressButtonOnce(button);
     }
 
-    public startKeyboardShortcut(button: ButtonPadButton): void {
+    public startKeyboardShortcut(
+        button: ButtonPadButton,
+        velocityScaleOverride?: number
+    ): void {
         switch (button) {
             case ButtonPadButton.BaseForward:
-                this.continuousBaseDrive(
-                    JOINT_VELOCITIES.translate_mobile_base *
-                        FunctionProvider.velocityScale,
-                    0
-                );
-                break;
             case ButtonPadButton.BaseReverse:
-                this.continuousBaseDrive(
-                    -JOINT_VELOCITIES.translate_mobile_base *
-                        FunctionProvider.velocityScale,
-                    0
-                );
-                break;
             case ButtonPadButton.BaseRotateLeft:
-                this.continuousBaseDrive(
-                    0,
-                    JOINT_VELOCITIES.rotate_mobile_base *
-                        FunctionProvider.velocityScale
-                );
-                break;
             case ButtonPadButton.BaseRotateRight:
-                this.continuousBaseDrive(
-                    0,
-                    -JOINT_VELOCITIES.rotate_mobile_base *
-                        FunctionProvider.velocityScale
-                );
+                this.pressButtonOnce(button, velocityScaleOverride);
                 break;
             default:
                 this.pressButtonOnce(button);
@@ -75,10 +50,14 @@ export class KeyboardFunctionProvider extends ButtonFunctionProvider {
             case ButtonPadButton.BaseReverse:
             case ButtonPadButton.BaseRotateLeft:
             case ButtonPadButton.BaseRotateRight:
-                this.stopCurrentAction(true);
                 break;
         }
     }
+
+    public stopMotion(): void {
+        this.stopCurrentAction(true);
+    }
+
     /** Starts listening for WASD keys to drive the base. */
     public enableBaseDrivingShortcuts() {
         window.addEventListener("keydown", this.handleKeyDown);
@@ -90,10 +69,6 @@ export class KeyboardFunctionProvider extends ButtonFunctionProvider {
         window.removeEventListener("keydown", this.handleKeyDown);
         window.removeEventListener("keyup", this.handleKeyUp);
         this.keysPressed.clear();
-        if (this.repeatIntervalId) {
-            clearInterval(this.repeatIntervalId);
-            this.repeatIntervalId = undefined;
-        }
     }
 
     /** Don't hijack WASD if the user is typing in a text field/modal. */
@@ -123,16 +98,8 @@ export class KeyboardFunctionProvider extends ButtonFunctionProvider {
         if (this.keysPressed.has(key)) return; // ignore OS auto-repeat
         this.keysPressed.add(key);
 
-        // Fire immediately, then keep stepping while held
+        // Fire one step per key press.
         this.pressButtonOnce(button);
-
-        if (!this.repeatIntervalId) {
-            this.repeatIntervalId = setInterval(() => {
-                this.keysPressed.forEach((k) => {
-                    this.pressButtonOnce(BASE_DRIVE_KEY_MAP[k]);
-                });
-            }, REPEAT_INTERVAL_MS);
-        }
     }
 
     private handleKeyUp(event: KeyboardEvent) {
@@ -143,9 +110,5 @@ export class KeyboardFunctionProvider extends ButtonFunctionProvider {
         // leave sticky state if modifiers change while keys are held.
         this.keysPressed.delete(key);
 
-        if (this.keysPressed.size === 0 && this.repeatIntervalId) {
-            clearInterval(this.repeatIntervalId);
-            this.repeatIntervalId = undefined;
-        }
     }
 }

@@ -10,6 +10,7 @@ import {
     ActionState,
     ActionStatusList,
     ROSBatteryState,
+    ROSOdometry,
 } from "shared/util";
 import {
     rosJointStatetoRobotPose,
@@ -70,6 +71,7 @@ export class Robot extends React.Component {
     private moveToPregraspResultCallback: (goalState: ActionState) => void;
     private showTabletResultCallback: (goalState: ActionState) => void;
     private amclPoseCallback: (pose: ROSLIB.Transform) => void;
+    private odomPoseCallback: (pose: ROSLIB.Transform) => void;
     private modeCallback: (mode: string) => void;
     private isHomedCallback: (isHomed: boolean) => void;
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
@@ -94,6 +96,7 @@ export class Robot extends React.Component {
         moveToPregraspResultCallback: (goalState: ActionState) => void;
         showTabletResultCallback: (goalState: ActionState) => void;
         amclPoseCallback: (pose: ROSLIB.Transform) => void;
+        odomPoseCallback: (pose: ROSLIB.Transform) => void;
         modeCallback: (mode: string) => void;
         isHomedCallback: (isHomed: boolean) => void;
         isRunStoppedCallback: (isRunStopped: boolean) => void;
@@ -108,6 +111,7 @@ export class Robot extends React.Component {
         this.moveToPregraspResultCallback = props.moveToPregraspResultCallback;
         this.showTabletResultCallback = props.showTabletResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
+        this.odomPoseCallback = props.odomPoseCallback;
         this.modeCallback = props.modeCallback;
         this.isHomedCallback = props.isHomedCallback;
         this.isRunStoppedCallback = props.isRunStoppedCallback;
@@ -299,6 +303,7 @@ export class Robot extends React.Component {
         this.createMapFrameTFClient();
         this.subscribeToHeadTiltTF();
         this.subscribeToMapTF();
+        this.subscribeToOdomPose();
         this.createTextToSpeechTopic();
         this.createHomeTheRobotService();
 
@@ -731,6 +736,31 @@ export class Robot extends React.Component {
     subscribeToMapTF() {
         this.mapFrameTfClient?.subscribe("base_link", (transform) => {
             if (this.amclPoseCallback) this.amclPoseCallback(transform);
+        });
+    }
+
+    subscribeToOdomPose() {
+        const odomTopic: ROSLIB.Topic<ROSOdometry> = new ROSLIB.Topic({
+            ros: this.ros,
+            name: "/odom",
+            messageType: "nav_msgs/msg/Odometry",
+        });
+        this.subscriptions.push(odomTopic);
+
+        odomTopic.subscribe((msg: ROSOdometry) => {
+            const pose = msg.pose.pose;
+            if (this.odomPoseCallback) {
+                this.odomPoseCallback(
+                    new ROSLIB.Transform({
+                        translation: {
+                            x: pose.position.x,
+                            y: pose.position.y,
+                            z: pose.position.z,
+                        } as ROSLIB.Vector3,
+                        rotation: pose.orientation as ROSLIB.Quaternion,
+                    })
+                );
+            }
         });
     }
 

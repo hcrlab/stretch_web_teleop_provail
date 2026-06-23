@@ -75,6 +75,33 @@ const KEYBOARD_SHORTCUTS: Record<string, ButtonPadButton> = {
     ArrowRight: ButtonPadButton.CameraPanRight,
 };
 
+const KEYBOARD_SHORTCUT_KEYS: Record<string, ButtonPadButton> = {
+    w: ButtonPadButton.BaseForward,
+    s: ButtonPadButton.BaseReverse,
+    a: ButtonPadButton.BaseRotateLeft,
+    d: ButtonPadButton.BaseRotateRight,
+
+    u: ButtonPadButton.ArmLift,
+    j: ButtonPadButton.ArmLower,
+    i: ButtonPadButton.ArmExtend,
+    k: ButtonPadButton.ArmRetract,
+
+    o: ButtonPadButton.GripperOpen,
+    l: ButtonPadButton.GripperClose,
+
+    t: ButtonPadButton.WristPitchUp,
+    g: ButtonPadButton.WristPitchDown,
+    h: ButtonPadButton.WristRotateOut,
+    y: ButtonPadButton.WristRotateIn,
+    f: ButtonPadButton.WristRollLeft,
+    r: ButtonPadButton.WristRollRight,
+
+    ArrowUp: ButtonPadButton.CameraTiltUp,
+    ArrowDown: ButtonPadButton.CameraTiltDown,
+    ArrowLeft: ButtonPadButton.CameraPanLeft,
+    ArrowRight: ButtonPadButton.CameraPanRight,
+};
+
 const NOT_HOMED_DISABLED_SHORTCUTS = new Set<ButtonPadButton>([
     ButtonPadButton.ArmLower,
     ButtonPadButton.ArmLift,
@@ -136,7 +163,7 @@ function shouldIgnoreShortcut(
     event: KeyboardEvent,
     pressedKeys: Set<string>
 ): boolean {
-    if (event.repeat || event.ctrlKey || event.metaKey) {
+    if (event.repeat || event.metaKey) {
         return true;
     }
 
@@ -151,6 +178,55 @@ function shouldIgnoreShortcut(
     }
 
     return false;
+}
+
+function isStopMotionShortcut(event: KeyboardEvent): boolean {
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+
+    return (
+        event.code === "Space" ||
+        event.key === " " ||
+        event.key === "Spacebar" ||
+        (event.shiftKey &&
+            event.altKey &&
+            (event.code === "KeyX" || key === "x"))
+    );
+}
+
+function getShortcutButton(event: KeyboardEvent): ButtonPadButton | undefined {
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+
+    return KEYBOARD_SHORTCUT_KEYS[key] || KEYBOARD_SHORTCUTS[event.code];
+}
+
+function getSpeedShortcutDirection(event: KeyboardEvent): -1 | 1 | undefined {
+    if (!(event.altKey && event.shiftKey)) return undefined;
+    if (event.code === "Minus" || event.key === "-") return -1;
+    if (event.code === "Equal" || event.key === "=" || event.key === "+")
+        return 1;
+    return undefined;
+}
+
+function getNextVelocityScale(currentScale: number): number {
+    return (
+        VELOCITY_SCALE.find(({ scale }) => scale > currentScale)?.scale ??
+        VELOCITY_SCALE[VELOCITY_SCALE.length - 1].scale
+    );
+}
+
+function getBoostedBaseShortcut(
+    event: KeyboardEvent
+): ButtonPadButton | undefined {
+    if (!(event.ctrlKey && event.shiftKey && event.altKey)) return undefined;
+
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    if (event.code === "KeyZ" || key === "z") {
+        return ButtonPadButton.BaseForward;
+    }
+    if (event.code === "KeyC" || key === "c") {
+        return ButtonPadButton.BaseReverse;
+    }
+    return undefined;
 }
 
 /** Operator interface webpage */
@@ -250,19 +326,33 @@ export const Operator = (props: {
 
             if (shouldIgnoreShortcut(event, pressedKeys)) return;
 
-            // First, handle robot-control keys (button pad shortcuts).
-            const button = KEYBOARD_SHORTCUTS[event.code];
-            if (button) {
-                const isModifiedShortcut = event.shiftKey && event.altKey;
-                if (!BASE_DRIVE_SHORTCUTS.has(button) && !isModifiedShortcut) {
-                    return;
-                }
+            if (isStopMotionShortcut(event)) {
+                event.preventDefault();
+                keyboardFunctionProvider.stopMotion();
+                return;
+            }
 
-                if (
-                    BASE_DRIVE_SHORTCUTS.has(button) &&
-                    event.altKey &&
-                    !isModifiedShortcut
-                ) {
+            const boostedBaseButton = getBoostedBaseShortcut(event);
+            if (boostedBaseButton) {
+                event.preventDefault();
+                keyboardFunctionProvider.startKeyboardShortcut(
+                    boostedBaseButton,
+                    getNextVelocityScale(velocityScaleRef.current)
+                );
+                return;
+            }
+
+            // First, handle robot-control keys (button pad shortcuts).
+            const button = getShortcutButton(event);
+            if (button) {
+                const hasBaseModifiers =
+                    event.ctrlKey && event.shiftKey && event.altKey;
+                const hasManipulationModifiers =
+                    !event.ctrlKey && event.shiftKey && event.altKey;
+                const hasRequiredModifiers = BASE_DRIVE_SHORTCUTS.has(button)
+                    ? hasBaseModifiers
+                    : hasManipulationModifiers;
+                if (!hasRequiredModifiers) {
                     return;
                 }
 
@@ -274,6 +364,25 @@ export const Operator = (props: {
                 if (!event.repeat) {
                     keyboardFunctionProvider.startKeyboardShortcut(button);
                 }
+                return;
+            }
+
+            const speedDirection = getSpeedShortcutDirection(event);
+            if (speedDirection) {
+                event.preventDefault();
+                const step = 0.1 * speedDirection;
+                const minScale = VELOCITY_SCALE[0].scale;
+                const maxScale = VELOCITY_SCALE[VELOCITY_SCALE.length - 1].scale;
+                const newScale = Math.min(
+                    maxScale,
+                    Math.max(
+                        minScale,
+                        Math.round((velocityScaleRef.current + step) * 10) / 10
+                    )
+                );
+                setVelocityScale(newScale);
+                velocityScaleRef.current = newScale;
+                FunctionProvider.velocityScale = newScale;
                 return;
             }
 
@@ -328,27 +437,11 @@ export const Operator = (props: {
 
                 // Adjust velocity scale: Minus = decrease, Equal (=) = increase
                 case "Minus": {
-                    event.preventDefault();
-                    const step = 0.1;
-                    const newScale = Math.max(
-                        0.1,
-                        Math.round((velocityScale - step) * 10) / 10
-                    );
-                    setVelocityScale(newScale);
-                    velocityScaleRef.current = newScale;
-                    FunctionProvider.velocityScale = newScale;
+                    if (!(event.altKey && event.shiftKey)) break;
                     break;
                 }
                 case "Equal": {
-                    event.preventDefault();
-                    const step = 0.1;
-                    const newScale = Math.min(
-                        1.0,
-                        Math.round((velocityScale + step) * 10) / 10
-                    );
-                    setVelocityScale(newScale);
-                    velocityScaleRef.current = newScale;
-                    FunctionProvider.velocityScale = newScale;
+                    if (!(event.altKey && event.shiftKey)) break;
                     break;
                 }
 
@@ -478,7 +571,7 @@ export const Operator = (props: {
         }
 
         function handleKeyUp(event: KeyboardEvent) {
-            const button = KEYBOARD_SHORTCUTS[event.code];
+            const button = getShortcutButton(event);
             if (button) {
                 keyboardFunctionProvider.stopKeyboardShortcut(button);
             }

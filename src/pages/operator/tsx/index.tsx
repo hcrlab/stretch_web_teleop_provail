@@ -205,6 +205,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "amclPose":
             remoteRobot.setMapPose(message.message);
             break;
+        case "odomPose":
+            remoteRobot.setOdomPose(message.message);
+            break;
         case "goalStatus":
             console.log("goalStatus", message.message);
             remoteRobot.setGoalReached(true);
