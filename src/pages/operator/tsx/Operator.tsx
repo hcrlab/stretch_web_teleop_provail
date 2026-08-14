@@ -41,6 +41,7 @@ import { Alert } from "./basic_components/Alert";
 import "operator/css/Operator.css";
 import { TextToSpeech } from "./layout_components/TextToSpeech";
 import { HomeTheRobot } from "./layout_components/HomeTheRobot";
+import { VoiceControl } from "./static_components/VoiceControl";
 
 /** Operator interface webpage */
 export const Operator = (props: {
@@ -430,6 +431,9 @@ export const Operator = (props: {
                 </div>
             )}
             <div id="operator-global-controls">
+                <div className="operator-voice">
+                    <VoiceControl />
+                </div>
                 <div
                     className={className("operator-pose-recorder", {
                         hideLabels: !layout.current.displayLabels,

@@ -43,6 +43,7 @@ import {
 import { CheckToggleButton } from "./basic_components/CheckToggleButton";
 import { UnderVideoButton } from "./function_providers/UnderVideoFunctionProvider";
 import { Alert } from "./basic_components/Alert";
+import { VoiceControl } from "./static_components/VoiceControl";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -54,7 +55,7 @@ export const MobileOperator = (props: {
     >([]);
     const [moveBaseState, setMoveBaseState] = React.useState<MoveBaseState>();
     const [cameraID, setCameraID] = React.useState<CameraViewId>(
-        CameraViewId.realsense,
+        CameraViewId.realsense
     );
     const [velocityScale, setVelocityScale] = React.useState<number>(0.8);
     const [hideMap, setHideMap] = React.useState<boolean>(true);
@@ -233,7 +234,7 @@ export const MobileOperator = (props: {
                         }}
                         onChange={(event) => {
                             FunctionProvider.velocityScale = Number(
-                                event.target.value,
+                                event.target.value
                             );
                         }}
                     />
@@ -299,6 +300,7 @@ export const MobileOperator = (props: {
                             <span className="material-icons">map</span>
                         </button>
                     </div>
+                    <VoiceControl compact />
                     {cameraID == CameraViewId.realsense && (
                         <div className="depth-sensing">
                             <CheckToggleButton
@@ -306,7 +308,7 @@ export const MobileOperator = (props: {
                                 onClick={() => {
                                     setDepthSensing(!depthSensing);
                                     underVideoFunctionProvider.provideFunctions(
-                                        UnderVideoButton.DepthSensing,
+                                        UnderVideoButton.DepthSensing
                                     ).onCheck!(!depthSensing);
                                 }}
                                 label="Depth Sensing"

@@ -1,0 +1,63 @@
+.voice-control {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: min(42rem, 90vw);
+    position: relative;
+}
+
+.voice-control > button.listening {
+    background-color: var(--btn-red);
+}
+
+.voice-control-status {
+    min-width: 16rem;
+    text-align: left;
+}
+
+.voice-control details summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.voice-control details summary::-webkit-details-marker {
+    display: none;
+}
+
+.voice-control-command-list {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.75rem);
+    z-index: 5;
+    width: 24rem;
+    padding: 1rem;
+    border-radius: var(--btn-brdr-radius);
+    background: var(--background-color);
+    box-shadow: var(--shadow);
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.4rem 1rem;
+}
+
+.voice-control.compact {
+    min-width: 0;
+    max-width: 100%;
+    gap: 0.5rem;
+}
+
+.voice-control.compact .voice-control-status {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .voice-control {
+        min-width: min(28rem, 90vw);
+    }
+
+    .voice-control-status {
+        min-width: 10rem;
+    }
+}

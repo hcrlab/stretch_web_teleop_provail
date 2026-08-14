@@ -137,7 +137,7 @@ You can add and delete tabs. Click the tab with the plus icon to add a `tab`. Yo
 
 ## Voice Commands
 
-You can control Stretch with voice commands. Click the info icon to see the available commands. Click the microphone icon to turn on the microphone. After you say a command, the command will display next to microphone icon. Click the microphone icon to turn off the microphone.
+You can control Stretch with voice commands. Click the info icon to see the available commands, whose names match the Movement column in `provail_keybindings.csv`. Click the microphone icon and allow microphone access to begin continuous listening. Each recognized command performs one step action and displays next to the microphone icon. Click the microphone icon again to stop listening.
 
 <p align="center">
     <img src="assets/tutorial/voice_commands.gif">

@@ -46,6 +46,7 @@ export let hasBetaTeleopKit: boolean;
 export let stretchTool: StretchTool;
 export let occupancyGrid: ROSOccupancyGrid | undefined = undefined;
 export let storageHandler: StorageHandler;
+const isMockOperator = new URL(window.location.href).searchParams.has("mock");
 
 // Create the function providers. These abstract the logic between the React
 // components and remote robot.
@@ -63,72 +64,73 @@ export var textToSpeechFunctionProvider: TextToSpeechFunctionProvider;
 export var homeTheRobotFunctionProvider: HomeTheRobotFunctionProvider =
     new HomeTheRobotFunctionProvider();
 
-// Create the WebRTC connection and connect the operator room
-connection = new WebRTCConnection({
-    peerRole: "operator",
-    polite: true,
-    onMessage: handleWebRTCMessage,
-    onTrackAdded: handleRemoteTrackAdded,
-    onMessageChannelOpen: configureRemoteRobot,
-    onConnectionEnd: disconnectFromRobot,
-});
-
-new Promise<void>(async (resolve) => {
-    let currURL = new URL(window.location.href);
-    let room_name = currURL.searchParams.get("robot");
-    if (
-        process.env.storage === "firebase" &&
-        !/^stretch-(re1|re2|se3)-\d{4}$/.test(room_name)
-    ) {
-        console.error(`ERROR: Invalid room ${room_name}`);
-        throw new Error("Invalid room name");
-    }
-    await connection.configure_signaler(room_name);
-    console.log("Signaler ready!");
-
-    let connected = false;
-    while (!connected) {
-        connection.hangup();
-
-        // Attempt to join robot room
-        let joinedRobotRoom = await connection.addOperatorToRobotRoom();
-        if (!joinedRobotRoom) {
-            console.log("Operator failed to join robot room");
-            await delay(500);
-            continue;
-        }
-
-        // Wait for WebRTC connection to resolve, timeout after 10 seconds
-        let isResolved = await waitUntil(
-            () => connection.connectionState() == "connected",
-            10000,
-        );
-        if (!isResolved) {
-            console.warn("WebRTC connection could not resolve");
-            await delay(500);
-            continue;
-        }
-
-        // Wait for data to flow through the data channel, timeout after 10 seconds
-        connected = await waitUntilAsync(
-            async () => await connection.isConnected(),
-            10000,
-        );
-        if (!connected) {
-            console.warn("No data flowing through data channel");
-            await delay(500);
-            continue;
-        }
-
-        await delay(1000); // 1 second delay to allow data to flow through data channel
-        initializeOperator();
-        resolve();
-    }
-});
-
 // Create root once when index is loaded
 const container = document.getElementById("root");
 root = createRoot(container!);
+
+if (isMockOperator) {
+    initializeMockOperator();
+} else {
+    // Create the WebRTC connection and connect the operator room
+    connection = new WebRTCConnection({
+        peerRole: "operator",
+        polite: true,
+        onMessage: handleWebRTCMessage,
+        onTrackAdded: handleRemoteTrackAdded,
+        onMessageChannelOpen: configureRemoteRobot,
+        onConnectionEnd: disconnectFromRobot,
+    });
+
+    new Promise<void>(async (resolve) => {
+        let currURL = new URL(window.location.href);
+        let room_name = currURL.searchParams.get("robot");
+        if (
+            process.env.storage === "firebase" &&
+            !/^stretch-(re1|re2|se3)-\d{4}$/.test(room_name)
+        ) {
+            console.error(`ERROR: Invalid room ${room_name}`);
+            throw new Error("Invalid room name");
+        }
+        await connection.configure_signaler(room_name);
+        console.log("Signaler ready!");
+
+        let connected = false;
+        while (!connected) {
+            connection.hangup();
+
+            let joinedRobotRoom = await connection.addOperatorToRobotRoom();
+            if (!joinedRobotRoom) {
+                console.log("Operator failed to join robot room");
+                await delay(500);
+                continue;
+            }
+
+            let isResolved = await waitUntil(
+                () => connection.connectionState() == "connected",
+                10000,
+            );
+            if (!isResolved) {
+                console.warn("WebRTC connection could not resolve");
+                await delay(500);
+                continue;
+            }
+
+            connected = await waitUntilAsync(
+                async () => await connection.isConnected(),
+                10000,
+            );
+            if (!connected) {
+                console.warn("No data flowing through data channel");
+                await delay(500);
+                continue;
+            }
+
+            await delay(1000);
+            initializeOperator();
+            resolve();
+        }
+    });
+}
 
 /** Handle when the WebRTC connection adds a new track on a camera video stream. */
 function handleRemoteTrackAdded(event: RTCTrackEvent) {
@@ -276,6 +278,111 @@ function configureRemoteRobot() {
     );
 }
 
+/** Configures an in-browser robot substitute for UI testing. */
+function configureMockRemoteRobot() {
+    remoteRobot = new RemoteRobot({
+        robotChannel: (message: cmd) => {
+            console.log("[mock robot command]", message);
+        },
+    });
+    occupancyGrid = undefined;
+    hasBetaTeleopKit = false;
+    stretchTool = StretchTool.DEX_GRIPPER;
+    FunctionProvider.addRemoteRobot(remoteRobot);
+    mapFunctionProvider = new MapFunctionProvider();
+    remoteRobot.sensors.setFunctionProviderCallback(
+        buttonFunctionProvider.updateJointStates,
+    );
+    remoteRobot.sensors.setJointStateFunctionProviderCallback(
+        underVideoFunctionProvider.jointStateCallback,
+    );
+    remoteRobot.sensors.setBatteryFunctionProviderCallback(
+        batteryVoltageFunctionProvider.updateVoltage,
+    );
+    remoteRobot.sensors.setModeFunctionProviderCallback(
+        homeTheRobotFunctionProvider.updateModeState,
+    );
+    remoteRobot.sensors.setIsHomedFunctionProviderCallback(
+        homeTheRobotFunctionProvider.updateIsHomedState,
+    );
+    remoteRobot.sensors.setRunStopFunctionProviderCallback(
+        runStopFunctionProvider.updateRunStopState,
+    );
+}
+
+function initializeMockOperator() {
+    console.info("Starting operator in mock mode.");
+    addMockVideoStream("overhead", "#335c67", "Mock overhead");
+    addMockVideoStream("realsense", "#6b705c", "Mock realsense");
+    addMockVideoStream("gripper", "#7f5539", "Mock gripper");
+    configureMockRemoteRobot();
+    initializeOperator();
+
+    window.setTimeout(() => {
+        remoteRobot.sensors.setBatteryVoltage(13.1);
+        remoteRobot.sensors.setMode("navigation");
+        remoteRobot.sensors.setIsHomed(true);
+        remoteRobot.sensors.setRunStopState(false);
+        remoteRobot.sensors.checkValidJointState(createMockRobotPose(), {}, {});
+    }, 250);
+}
+
+function addMockVideoStream(
+    streamName: string,
+    backgroundColor: string,
+    label: string,
+) {
+    const stream = createMockVideoStream(backgroundColor, label);
+    const track = stream.getVideoTracks()[0];
+    allRemoteStreams.set(streamName, { track, stream });
+}
+
+function createMockVideoStream(
+    backgroundColor: string,
+    label: string,
+): MediaStream {
+    const canvas = document.createElement("canvas");
+    canvas.width = 640;
+    canvas.height = 360;
+    const context = canvas.getContext("2d");
+    if (!context) throw Error("Could not create mock video canvas context");
+
+    let frame = 0;
+    const draw = () => {
+        frame += 1;
+        context.fillStyle = backgroundColor;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = "rgba(255, 255, 255, 0.12)";
+        context.fillRect((frame * 3) % canvas.width, 0, 120, canvas.height);
+        context.fillStyle = "white";
+        context.font = "32px sans-serif";
+        context.fillText(label, 32, 64);
+        context.font = "18px monospace";
+        context.fillText(`frame ${frame}`, 32, 96);
+        window.requestAnimationFrame(draw);
+    };
+    draw();
+
+    return (canvas as HTMLCanvasElement & {
+        captureStream: (frameRate?: number) => MediaStream;
+    }).captureStream(15);
+}
+
+function createMockRobotPose(): RobotPose {
+    return {
+        joint_head_tilt: 0,
+        joint_head_pan: 0,
+        joint_gripper_finger_left: 0.04,
+        wrist_extension: 0.1,
+        joint_lift: 0.4,
+        joint_wrist_roll: 0,
+        joint_wrist_pitch: 0,
+        joint_wrist_yaw: 0,
+        translate_mobile_base: 0,
+        rotate_mobile_base: 0,
+    };
+}
+
 /**
  * Creates a storage handler based on the `storage` property in the process
  * environment.
@@ -327,7 +434,7 @@ function renderOperator(storageHandler: StorageHandler) {
               />,
           );
 
-    if (!isMobile) {
+    if (!isMobile && !isMockOperator) {
         var loader = document.createElement("div");
         loader.className = "loader";
         var loaderText = document.createElement("div");
@@ -354,16 +461,19 @@ function renderOperator(storageHandler: StorageHandler) {
 }
 
 function disconnectFromRobot() {
+    if (!connection) return;
     connection.hangup();
     connection.stop();
 }
 
 window.onbeforeunload = () => {
+    if (!connection) return;
     connection.hangup();
     connection.stop();
 };
 
 window.onunload = () => {
+    if (!connection) return;
     connection.hangup();
     connection.stop();
 };
