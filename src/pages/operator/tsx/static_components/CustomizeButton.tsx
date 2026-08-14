@@ -1,3 +1,4 @@
+import React from "react";
 import "operator/css/CustomizeButton.css";
 import CheckIcon from "@mui/icons-material/Check";
 import BuildIcon from "@mui/icons-material/Build";
@@ -7,6 +8,8 @@ type CustomizeButtonProps = {
     customizing: boolean;
     /** Callback for clicking the button */
     onClick: () => void;
+    /** Whether to show the text label next to the icon */
+    showText?: boolean;
 };
 
 /** Button to toggle customization mode. */
@@ -22,7 +25,7 @@ export const CustomizeButton = (props: CustomizeButtonProps) => {
             }
         >
             {icon}
-            {text}
+            {props.showText !== false ? text : null}
         </button>
     );
 };

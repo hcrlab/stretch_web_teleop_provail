@@ -56,6 +56,62 @@ const negativeButtonPadFunctions = new Set<ButtonPadButton>([
     ButtonPadButton.CameraPanRight,
 ]);
 
+const BASE_STEP_REFERENCE_SCALE = 0.8;
+const BASE_STEP_SLOWEST_SCALE = 0.2;
+const BASE_STEP_FASTEST_SCALE = 1.6;
+const BASE_STEP_DURATION_MS = 250;
+const BASE_STEP_MEDIUM_MULTIPLIER = 1 +
+    ((BASE_STEP_REFERENCE_SCALE - BASE_STEP_SLOWEST_SCALE) /
+        (BASE_STEP_FASTEST_SCALE - BASE_STEP_SLOWEST_SCALE)) *
+        9;
+const BASE_STEP_MIN_MULTIPLIER = 0.5;
+const BASE_STEP_MAX_MULTIPLIER = BASE_STEP_MEDIUM_MULTIPLIER * 0.7;
+const BASE_STEP_TRANSLATION_M = 0.05;
+const BASE_STEP_ROTATION_RAD = 0.15;
+const MANIPULATOR_STEP_REFERENCE_SCALE = 0.8;
+
+const speedScaledStepButtons = new Set<ButtonPadButton>([
+    ButtonPadButton.ArmLift,
+    ButtonPadButton.ArmLower,
+    ButtonPadButton.ArmExtend,
+    ButtonPadButton.ArmRetract,
+    ButtonPadButton.WristRotateIn,
+    ButtonPadButton.WristRotateOut,
+    ButtonPadButton.WristPitchUp,
+    ButtonPadButton.WristPitchDown,
+    ButtonPadButton.WristRollLeft,
+    ButtonPadButton.WristRollRight,
+]);
+
+function getBaseStepScale(velocityScale = FunctionProvider.velocityScale): number {
+    const minScale = BASE_STEP_SLOWEST_SCALE;
+    const maxScale = BASE_STEP_FASTEST_SCALE;
+    const normalized = (velocityScale - minScale) / (maxScale - minScale);
+    return (
+        BASE_STEP_MIN_MULTIPLIER +
+        Math.max(0, Math.min(1, normalized)) *
+            (BASE_STEP_MAX_MULTIPLIER - BASE_STEP_MIN_MULTIPLIER)
+    );
+}
+
+function getBaseStepDurationMs(velocityScale?: number): number {
+    return BASE_STEP_DURATION_MS * getBaseStepScale(velocityScale);
+}
+
+function getBaseStepTranslationTarget(velocityScale?: number): number {
+    return BASE_STEP_TRANSLATION_M * getBaseStepScale(velocityScale);
+}
+
+function getBaseStepRotationTarget(velocityScale?: number): number {
+    return BASE_STEP_ROTATION_RAD * getBaseStepScale(velocityScale);
+}
+
+function getManipulatorStepScale(buttonPadFunction: ButtonPadButton): number {
+    return speedScaledStepButtons.has(buttonPadFunction)
+        ? FunctionProvider.velocityScale / MANIPULATOR_STEP_REFERENCE_SCALE
+        : 1;
+}
+
 /** Functions called when the user interacts with a button. */
 export type ButtonFunctions = {
     onClick: () => void;
@@ -192,54 +248,87 @@ export class ButtonFunctionProvider extends FunctionProvider {
     }
 
     /**
-     * Executes one bounded movement for a button, regardless of the currently
-     * selected pointer interaction mode. This is used by inputs such as voice
-     * control where there is no corresponding pointer-release event.
+     * Executes the step-action behavior for a button exactly once, independent
+     * of the current global action mode.
      *
-     * @returns false when the button is disabled by a collision or joint limit
+     * This is useful for interaction surfaces such as keyboard shortcuts, where
+     * pressing a shortcut should not start a press-and-hold or click-click
+     * continuous action.
+     *
+     * @param buttonPadFunction the {@link ButtonPadButton} to execute once
      */
-    public executeButtonPress(buttonType: ButtonPadButton): boolean {
-        const currentState = this.buttonStateMap.get(buttonType);
-        if (
-            currentState === ButtonState.Collision ||
-            currentState === ButtonState.Limit
-        ) {
-            return false;
-        }
+    public pressButtonOnce(
+        buttonPadFunction: ButtonPadButton,
+        velocityScaleOverride?: number
+    ) {
+        const jointName: ValidJoints =
+            getJointNameFromButtonFunction(buttonPadFunction);
+        const multiplier: number = negativeButtonPadFunctions.has(
+            buttonPadFunction
+        )
+            ? -1
+            : 1;
+        const isBaseJoint =
+            jointName === "translate_mobile_base" ||
+            jointName === "rotate_mobile_base";
 
-        const jointName = getJointNameFromButtonFunction(buttonType);
-        const multiplier = negativeButtonPadFunctions.has(buttonType) ? -1 : 1;
+        // Shared velocityScale controls both arm and base speeds so the base
+        // moves faster as the user increases the global SpeedControl.
         const velocity =
             multiplier *
             JOINT_VELOCITIES[jointName]! *
             FunctionProvider.velocityScale;
+        const baseStepVelocity =
+            multiplier *
+            JOINT_VELOCITIES[jointName]! *
+            BASE_STEP_REFERENCE_SCALE *
+            getBaseStepScale(velocityScaleOverride);
+
+        // Step increments for the base should also scale with velocityScale so
+        // pressing a step moves farther at higher speed presets.
         const increment =
             multiplier *
             JOINT_INCREMENTS[jointName]! *
-            FunctionProvider.velocityScale;
+            (isBaseJoint
+                ? FunctionProvider.velocityScale
+                : getManipulatorStepScale(buttonPadFunction));
 
-        switch (buttonType) {
+        switch (buttonPadFunction) {
             case ButtonPadButton.BaseForward:
             case ButtonPadButton.BaseReverse:
-                this.incrementalBaseDrive(velocity, 0.0);
+                this.pulseBaseDrive(
+                    baseStepVelocity,
+                    0,
+                    getBaseStepDurationMs(velocityScaleOverride),
+                    getBaseStepTranslationTarget(velocityScaleOverride)
+                );
                 break;
             case ButtonPadButton.BaseRotateLeft:
             case ButtonPadButton.BaseRotateRight:
-                this.incrementalBaseDrive(0.0, velocity);
+                this.pulseBaseDrive(
+                    0,
+                    baseStepVelocity,
+                    getBaseStepDurationMs(velocityScaleOverride),
+                    getBaseStepRotationTarget(velocityScaleOverride)
+                );
+                break;
+            case ButtonPadButton.CameraTiltUp:
+            case ButtonPadButton.CameraTiltDown:
+            case ButtonPadButton.CameraPanLeft:
+            case ButtonPadButton.CameraPanRight:
+                this.incrementalJointMovement(jointName, increment);
+                FunctionProvider.remoteRobot?.setToggle(
+                    "setFollowGripper",
+                    false
+                );
                 break;
             default:
                 this.incrementalJointMovement(jointName, increment);
-                if (panTiltButtons.includes(buttonType)) {
-                    FunctionProvider.remoteRobot?.setToggle(
-                        "setFollowGripper",
-                        false
-                    );
-                }
+                break;
         }
 
-        this.setButtonActiveState(buttonType);
-        window.setTimeout(() => this.setButtonInactiveState(buttonType), 1000);
-        return true;
+        this.setButtonActiveState(buttonPadFunction);
+        setTimeout(() => this.setButtonInactiveState(buttonPadFunction), 1000);
     }
 
     /**
@@ -305,25 +394,50 @@ export class ButtonFunctionProvider extends FunctionProvider {
         )
             ? -1
             : 1;
+
+        const isBaseJoint =
+            jointName === "translate_mobile_base" ||
+            jointName === "rotate_mobile_base";
+
         const velocity =
             multiplier *
             JOINT_VELOCITIES[jointName]! *
             FunctionProvider.velocityScale;
+        const baseStepVelocity =
+            multiplier *
+            JOINT_VELOCITIES[jointName]! *
+            BASE_STEP_REFERENCE_SCALE *
+            getBaseStepScale();
+
         const increment =
             multiplier *
             JOINT_INCREMENTS[jointName]! *
-            FunctionProvider.velocityScale;
+            (isBaseJoint
+                ? FunctionProvider.velocityScale
+                : getManipulatorStepScale(buttonPadFunction));
 
         switch (FunctionProvider.actionMode) {
             case ActionMode.StepActions:
                 switch (buttonPadFunction) {
                     case ButtonPadButton.BaseForward:
                     case ButtonPadButton.BaseReverse:
-                        action = () => this.incrementalBaseDrive(velocity, 0.0);
+                        action = () =>
+                            this.pulseBaseDrive(
+                                baseStepVelocity,
+                                0,
+                                getBaseStepDurationMs(),
+                                getBaseStepTranslationTarget()
+                            );
                         break;
                     case ButtonPadButton.BaseRotateLeft:
                     case ButtonPadButton.BaseRotateRight:
-                        action = () => this.incrementalBaseDrive(0.0, velocity);
+                        action = () =>
+                            this.pulseBaseDrive(
+                                0,
+                                baseStepVelocity,
+                                getBaseStepDurationMs(),
+                                getBaseStepRotationTarget()
+                            );
                         break;
                     case ButtonPadButton.ArmLower:
                     case ButtonPadButton.ArmLift:
@@ -371,11 +485,14 @@ export class ButtonFunctionProvider extends FunctionProvider {
                 switch (buttonPadFunction) {
                     case ButtonPadButton.BaseForward:
                     case ButtonPadButton.BaseReverse:
-                        action = () => this.continuousBaseDrive(velocity, 0.0);
+                        // Use continuous base drive (cmd_vel style) so the base
+                        // moves continuously while pressed. Velocity is already
+                        // scaled by FunctionProvider.velocityScale.
+                        action = () => this.continuousBaseDrive(velocity, 0);
                         break;
                     case ButtonPadButton.BaseRotateLeft:
                     case ButtonPadButton.BaseRotateRight:
-                        action = () => this.continuousBaseDrive(0.0, velocity);
+                        action = () => this.continuousBaseDrive(0, velocity);
                         break;
 
                     case ButtonPadButton.ArmLower:

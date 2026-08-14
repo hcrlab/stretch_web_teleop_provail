@@ -108,6 +108,7 @@ export type WebRTCMessage =
     | ValidJointStateMessage
     | OccupancyGridMessage
     | MapPoseMessage
+    | OdomPoseMessage
     | StopTrajectoryMessage
     | StopMoveBaseMessage
     | FollowJointTrajectoryActionResultMessage
@@ -206,6 +207,11 @@ export interface MapPoseMessage {
     message: ROSLIB.Transform;
 }
 
+export interface OdomPoseMessage {
+    type: "odomPose";
+    message: ROSLIB.Transform;
+}
+
 export interface BatteryVoltageMessage {
     type: "batteryVoltage";
     message: number;
@@ -213,6 +219,15 @@ export interface BatteryVoltageMessage {
 
 export interface AMCLPose extends Message {
     header: string;
+    pose: {
+        pose: ROSPose;
+        covariance: number[];
+    };
+}
+
+export interface ROSOdometry extends Message {
+    header: string;
+    child_frame_id: string;
     pose: {
         pose: ROSPose;
         covariance: number[];

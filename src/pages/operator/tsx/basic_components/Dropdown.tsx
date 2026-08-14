@@ -10,8 +10,19 @@ export const Dropdown = <T extends string | JSX.Element>(props: {
     placeholderText?: string;
     showActive?: boolean;
     placement: string;
+    /** Optional controlled open state */
+    open?: boolean;
+    /** Callback when open state should change (controlled) */
+    onOpenChange?: (open: boolean) => void;
 }) => {
-    const [showDropdown, setShowDropdown] = React.useState(false);
+    const [internalShowDropdown, setInternalShowDropdown] =
+        React.useState(false);
+    const showDropdown =
+        props.open === undefined ? internalShowDropdown : props.open;
+    const setShowDropdown = (open: boolean) => {
+        if (props.onOpenChange) props.onOpenChange(open);
+        else setInternalShowDropdown(open);
+    };
     const [placement, setPlacement] = React.useState(props.placement);
     const inputRef = React.useRef<HTMLDivElement>(null);
     const dropdownPopupRef = React.useRef<HTMLDivElement>(null);

@@ -1,16 +1,20 @@
 import ROSLIB from "roslib";
 import { BASIC_LAYOUT } from "../default_layouts/SIMPLE_LAYOUT";
+import { PROVAIL_LAYOUT } from "../default_layouts/PROVAIL_LAYOUT";
+import { CAMERA_ONLY } from "../default_layouts/CAMERA_ONLY";
 import { LayoutDefinition } from "operator/tsx/utils/component_definitions";
 import { ArucoMarkersInfo, RobotPose } from "shared/util";
 import { ARUCO_MARKER_INFO } from "../utils/aruco_markers_dict";
 
 /** Type for all the possible names of default layouts. */
-export type DefaultLayoutName = "Basic Layout";
+export type DefaultLayoutName = "Provail Layout" | "Basic Layout" | "Camera Only";
 
 /** Object with all the default layouts. */
 export const DEFAULT_LAYOUTS: { [key in DefaultLayoutName]: LayoutDefinition } =
     {
         "Basic Layout": BASIC_LAYOUT,
+        "Provail Layout": PROVAIL_LAYOUT,
+        "Camera Only": CAMERA_ONLY,
     };
 
 /**
@@ -180,4 +184,15 @@ export abstract class StorageHandler {
     public loadDefaultLayout(layoutName: DefaultLayoutName): LayoutDefinition {
         return JSON.parse(JSON.stringify(DEFAULT_LAYOUTS[layoutName]));
     }
+
+    public loadLayout(layoutName: string): LayoutDefinition | null {
+        if (this.getDefaultLayoutNames().includes(layoutName)) {
+            return this.loadDefaultLayout(layoutName as DefaultLayoutName);
+        } else if (this.getCustomLayoutNames().includes(layoutName)) {
+            return this.loadCustomLayout(layoutName);
+        }
+        console.error(`Layout ${layoutName} not found`);
+        return null;
+    }
+
 }

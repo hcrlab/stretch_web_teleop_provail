@@ -1,0 +1,19 @@
+[Unit]
+Description=Stretch Web Teleop Provail - Boot Service
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hello-robot
+Group=hello-robot
+WorkingDirectory=/home/hello-robot/provail_ws
+ExecStart=/bin/bash /home/hello-robot/provail_ws/src/stretch_web_teleop_provail/autostart.sh
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+

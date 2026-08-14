@@ -80,6 +80,20 @@ export type ComponentDefinition = {
 export type ButtonPadDefinition = ComponentDefinition & {
     /** Indicates the shape and functions on the button pad*/
     id: ButtonPadId | ButtonPadIdMobile;
+    /** Explicit width in pixels; undefined means fill available */
+    width?: number;
+    /** Explicit height in pixels; undefined means auto */
+    height?: number;
+};
+
+/**
+ * Definition for a button grid component
+ */
+export type ButtonGridDefinition = ComponentDefinition & {
+    /** Explicit width in pixels; undefined means fill available */
+    width?: number;
+    /** Explicit height in pixels; undefined means auto */
+    height?: number;
 };
 
 export type ParentComponentDefinition = ComponentDefinition & {
@@ -102,6 +116,12 @@ export type LayoutGridDefinition = ComponentDefinition & {
  * Definition for a tabs component
  */
 export type PanelDefinition = ComponentDefinition & {
+    /** Relative size of this panel inside its parent flex layout (fallback when no explicit size) */
+    flexGrow?: number;
+    /** Explicit width in pixels */
+    width?: number;
+    /** Explicit height in pixels */
+    height?: number;
     /** List of definitions for individual tabs */
     children: TabDefinition[];
 };
@@ -122,6 +142,10 @@ export type CameraViewDefinition = ParentComponentDefinition & {
     id: CameraViewId;
     /** Whether to display the default buttons under the camera view */
     displayButtons: boolean;
+    /** Explicit width in pixels; camera aspect ratio is preserved on resize */
+    width?: number;
+    /** Explicit height in pixels; camera aspect ratio is preserved on resize */
+    height?: number;
 };
 
 /**

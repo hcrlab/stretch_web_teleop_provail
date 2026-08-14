@@ -1,21 +1,27 @@
 import React from "react";
-import { AudioControl } from "./static_components/AudioControl";
-import { SpeedControl } from "./static_components/SpeedControl";
+// AudioControl removed from header per UX request
+import { SpeedControl, VELOCITY_SCALE } from "./static_components/SpeedControl";
 import { LayoutArea } from "./static_components/LayoutArea";
 import { CustomizeButton } from "./static_components/CustomizeButton";
+import { LoadLayoutModal } from "./static_components/Sidebar";
 import { GlobalOptionsProps, Sidebar } from "./static_components/Sidebar";
 import { SharedState } from "./layout_components/CustomizableComponent";
 import {
     ActionMode,
     ComponentDefinition,
     LayoutDefinition,
+    ComponentType,
+    CameraViewId,
+    CameraViewDefinition,
 } from "./utils/component_definitions";
+
 import { className, ActionState, RemoteStream, RobotPose } from "shared/util";
 import {
     buttonFunctionProvider,
     underMapFunctionProvider,
     underVideoFunctionProvider,
     homeTheRobotFunctionProvider,
+    keyboardFunctionProvider,
     hasBetaTeleopKit,
     stretchTool,
 } from ".";
@@ -43,11 +49,193 @@ import { TextToSpeech } from "./layout_components/TextToSpeech";
 import { HomeTheRobot } from "./layout_components/HomeTheRobot";
 import { VoiceControl } from "./static_components/VoiceControl";
 
+const KEYBOARD_SHORTCUTS: Record<string, ButtonPadButton> = {
+    KeyW: ButtonPadButton.BaseForward,
+    KeyS: ButtonPadButton.BaseReverse,
+    KeyA: ButtonPadButton.BaseRotateLeft,
+    KeyD: ButtonPadButton.BaseRotateRight,
+
+    KeyU: ButtonPadButton.ArmLift,
+    KeyJ: ButtonPadButton.ArmLower,
+    KeyI: ButtonPadButton.ArmExtend,
+    KeyK: ButtonPadButton.ArmRetract,
+
+    KeyO: ButtonPadButton.GripperOpen,
+    KeyL: ButtonPadButton.GripperClose,
+
+    KeyT: ButtonPadButton.WristPitchUp,
+    KeyG: ButtonPadButton.WristPitchDown,
+    KeyH: ButtonPadButton.WristRotateOut,
+    KeyY: ButtonPadButton.WristRotateIn,
+    KeyF: ButtonPadButton.WristRollLeft,
+    KeyR: ButtonPadButton.WristRollRight,
+
+    ArrowUp: ButtonPadButton.CameraTiltUp,
+    ArrowDown: ButtonPadButton.CameraTiltDown,
+    ArrowLeft: ButtonPadButton.CameraPanLeft,
+    ArrowRight: ButtonPadButton.CameraPanRight,
+};
+
+const KEYBOARD_SHORTCUT_KEYS: Record<string, ButtonPadButton> = {
+    w: ButtonPadButton.BaseForward,
+    s: ButtonPadButton.BaseReverse,
+    a: ButtonPadButton.BaseRotateLeft,
+    d: ButtonPadButton.BaseRotateRight,
+
+    u: ButtonPadButton.ArmLift,
+    j: ButtonPadButton.ArmLower,
+    i: ButtonPadButton.ArmExtend,
+    k: ButtonPadButton.ArmRetract,
+
+    o: ButtonPadButton.GripperOpen,
+    l: ButtonPadButton.GripperClose,
+
+    t: ButtonPadButton.WristPitchUp,
+    g: ButtonPadButton.WristPitchDown,
+    h: ButtonPadButton.WristRotateOut,
+    y: ButtonPadButton.WristRotateIn,
+    f: ButtonPadButton.WristRollLeft,
+    r: ButtonPadButton.WristRollRight,
+
+    ArrowUp: ButtonPadButton.CameraTiltUp,
+    ArrowDown: ButtonPadButton.CameraTiltDown,
+    ArrowLeft: ButtonPadButton.CameraPanLeft,
+    ArrowRight: ButtonPadButton.CameraPanRight,
+};
+
+const NOT_HOMED_DISABLED_SHORTCUTS = new Set<ButtonPadButton>([
+    ButtonPadButton.ArmLower,
+    ButtonPadButton.ArmLift,
+    ButtonPadButton.ArmExtend,
+    ButtonPadButton.ArmRetract,
+    ButtonPadButton.WristRotateIn,
+    ButtonPadButton.WristRotateOut,
+    ButtonPadButton.GripperOpen,
+    ButtonPadButton.GripperClose,
+]);
+
+const BASE_DRIVE_SHORTCUTS = new Set<ButtonPadButton>([
+    ButtonPadButton.BaseForward,
+    ButtonPadButton.BaseReverse,
+    ButtonPadButton.BaseRotateLeft,
+    ButtonPadButton.BaseRotateRight,
+]);
+
+const ALT_SHORTCUT_LAYER_KEY = "Digit2";
+
+function isShortcutTextTarget(event: KeyboardEvent): boolean {
+    const target = event.target as HTMLElement | null;
+    if (!target) return false;
+
+    return (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable
+    );
+}
+
+function isAltShortcut(
+    event: KeyboardEvent,
+    pressedKeys: Set<string>
+): boolean {
+    return (
+        event.altKey &&
+        pressedKeys.has(ALT_SHORTCUT_LAYER_KEY) &&
+        event.code !== ALT_SHORTCUT_LAYER_KEY
+    );
+}
+
+function cloneComponentDefinition<T extends ComponentDefinition>(
+    definition: T
+): T {
+    const maybeParent = definition as T & { children?: ComponentDefinition[] };
+    const clone = {
+        ...definition,
+        children: maybeParent.children?.map((child) =>
+            cloneComponentDefinition(child)
+        ),
+    };
+
+    return clone as T;
+}
+
+function shouldIgnoreShortcut(
+    event: KeyboardEvent,
+    pressedKeys: Set<string>
+): boolean {
+    if (event.repeat || event.metaKey) {
+        return true;
+    }
+
+    if (isShortcutTextTarget(event)) {
+        return true;
+    }
+
+    if (event.altKey && !isAltShortcut(event, pressedKeys)) {
+        // Allow Alt+Shift combos to bypass the Alt-layer requirement so
+        // Shift+Alt+<key> shortcuts work without holding the Digit2 layer key.
+        if (!event.shiftKey) return true;
+    }
+
+    return false;
+}
+
+function isStopMotionShortcut(event: KeyboardEvent): boolean {
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+
+    return (
+        event.code === "Space" ||
+        event.key === " " ||
+        event.key === "Spacebar" ||
+        (event.shiftKey &&
+            event.altKey &&
+            (event.code === "KeyX" || key === "x"))
+    );
+}
+
+function getShortcutButton(event: KeyboardEvent): ButtonPadButton | undefined {
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+
+    return KEYBOARD_SHORTCUT_KEYS[key] || KEYBOARD_SHORTCUTS[event.code];
+}
+
+function getSpeedShortcutDirection(event: KeyboardEvent): -1 | 1 | undefined {
+    if (!(event.altKey && event.shiftKey)) return undefined;
+    if (event.code === "Minus" || event.key === "-") return -1;
+    if (event.code === "Equal" || event.key === "=" || event.key === "+")
+        return 1;
+    return undefined;
+}
+
+function getNextVelocityScale(currentScale: number): number {
+    return (
+        VELOCITY_SCALE.find(({ scale }) => scale > currentScale)?.scale ??
+        VELOCITY_SCALE[VELOCITY_SCALE.length - 1].scale
+    );
+}
+
+function getBoostedBaseShortcut(
+    event: KeyboardEvent
+): ButtonPadButton | undefined {
+    if (!(event.ctrlKey && event.shiftKey && event.altKey)) return undefined;
+
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    if (event.code === "KeyZ" || key === "z") {
+        return ButtonPadButton.BaseForward;
+    }
+    if (event.code === "KeyC" || key === "c") {
+        return ButtonPadButton.BaseReverse;
+    }
+    return undefined;
+}
+
 /** Operator interface webpage */
 export const Operator = (props: {
     remoteStreams: Map<string, RemoteStream>;
     layout: LayoutDefinition;
     storageHandler: StorageHandler;
+    customizationEnabled: boolean;
 }) => {
     const [customizing, setCustomizing] = React.useState(false);
     const [selectedPath, setSelectedPath] = React.useState<string | undefined>(
@@ -59,22 +247,367 @@ export const Operator = (props: {
     const [velocityScale, setVelocityScale] = React.useState<number>(
         FunctionProvider.velocityScale
     );
+    // Keep a ref in sync so event handlers (which capture closures) can
+    // always read the latest velocity scale without needing to re-register
+    // the DOM event listeners on every change.
+    const velocityScaleRef = React.useRef<number>(
+        FunctionProvider.velocityScale
+    );
+    React.useEffect(() => {
+        velocityScaleRef.current = velocityScale;
+    }, [velocityScale]);
+    // No separate base velocity scale — base uses shared velocityScale.
     const [buttonCollision, setButtonCollision] = React.useState<
         ButtonPadButton[]
     >([]);
     const [moveBaseState, setMoveBaseState] = React.useState<ActionState>();
     const [moveToPregraspState, setMoveToPregraspState] =
         React.useState<ActionState>();
-    const [showTabletState, setShowTabletState] =
-        React.useState<ActionState>(false);
-    const [robotNotHomed, setRobotNotHomed] =
-        React.useState<ActionState>(false);
-    function showHomeTheRobotGlobalControl(isHomed: ActionState) {
+    const [showTabletState, setShowTabletState] = React.useState<
+        ActionState | undefined
+    >(undefined);
+    const [robotNotHomed, setRobotNotHomed] = React.useState<boolean>(true);
+    function showHomeTheRobotGlobalControl(isHomed: boolean) {
         setRobotNotHomed(!isHomed);
     }
-    homeTheRobotFunctionProvider.setIsHomedCallback(
-        showHomeTheRobotGlobalControl
-    );
+    React.useEffect(() => {
+        homeTheRobotFunctionProvider.setIsHomedCallback(
+            showHomeTheRobotGlobalControl
+        );
+    }, []);
+
+    const [showLoadLayoutModal, setShowLoadLayoutModal] =
+        React.useState<boolean>(false);
+
+    // State to control the header layout dropdown open state so keyboard can open it
+    const [layoutDropdownOpen, setLayoutDropdownOpen] =
+        React.useState<boolean>(false);
+
+    // Helper to programmatically select the header layout index
+    function handleLayoutSelectIndex(idx: number) {
+        const defaultNames = props.storageHandler.getDefaultLayoutNames();
+        const customNames = props.storageHandler.getCustomLayoutNames();
+        if (idx < defaultNames.length) {
+            globalOptionsProps.loadLayout(defaultNames[idx], true);
+            return;
+        }
+
+        // custom
+        globalOptionsProps.loadLayout(
+            customNames[idx - defaultNames.length],
+            false
+        );
+    }
+
+    React.useEffect(() => {
+        if (customizing) return;
+
+        const pressedKeys = new Set<string>();
+        const shortcutListenerOptions = { capture: true };
+
+        function handleKeyDown(event: KeyboardEvent) {
+            pressedKeys.add(event.code);
+
+            // If the user presses the Alt-layer key (Digit2) by itself, swallow
+            // it so it acts as a temporary layer toggle. However, if Shift is
+            // also held (e.g., Alt+Shift+Digit2 used as a speed preset), allow
+            // the event to pass through so the Digit2 handling can run.
+            if (
+                event.altKey &&
+                event.code === ALT_SHORTCUT_LAYER_KEY &&
+                !isShortcutTextTarget(event)
+            ) {
+                if (!event.shiftKey) {
+                    event.preventDefault();
+                    return;
+                }
+                // else: allow Alt+Shift+Digit2 to be handled by the general
+                // shortcut handlers (this enables Alt+Shift+Digit2 preset).
+            }
+
+            if (shouldIgnoreShortcut(event, pressedKeys)) return;
+
+            if (isStopMotionShortcut(event)) {
+                event.preventDefault();
+                keyboardFunctionProvider.stopMotion();
+                return;
+            }
+
+            const boostedBaseButton = getBoostedBaseShortcut(event);
+            if (boostedBaseButton) {
+                event.preventDefault();
+                keyboardFunctionProvider.startKeyboardShortcut(
+                    boostedBaseButton,
+                    getNextVelocityScale(velocityScaleRef.current)
+                );
+                return;
+            }
+
+            // First, handle robot-control keys (button pad shortcuts).
+            const button = getShortcutButton(event);
+            if (button) {
+                const hasBaseModifiers =
+                    event.ctrlKey && event.shiftKey && event.altKey;
+                const hasManipulationModifiers =
+                    !event.ctrlKey && event.shiftKey && event.altKey;
+                const hasRequiredModifiers = BASE_DRIVE_SHORTCUTS.has(button)
+                    ? hasBaseModifiers
+                    : hasManipulationModifiers;
+                if (!hasRequiredModifiers) {
+                    return;
+                }
+
+                if (robotNotHomed && NOT_HOMED_DISABLED_SHORTCUTS.has(button)) {
+                    return;
+                }
+
+                event.preventDefault();
+                if (!event.repeat) {
+                    keyboardFunctionProvider.startKeyboardShortcut(button);
+                }
+                return;
+            }
+
+            const speedDirection = getSpeedShortcutDirection(event);
+            if (speedDirection) {
+                event.preventDefault();
+                const step = 0.1 * speedDirection;
+                const minScale = VELOCITY_SCALE[0].scale;
+                const maxScale = VELOCITY_SCALE[VELOCITY_SCALE.length - 1].scale;
+                const newScale = Math.min(
+                    maxScale,
+                    Math.max(
+                        minScale,
+                        Math.round((velocityScaleRef.current + step) * 10) / 10
+                    )
+                );
+                setVelocityScale(newScale);
+                velocityScaleRef.current = newScale;
+                FunctionProvider.velocityScale = newScale;
+                return;
+            }
+
+            // Fallback: on some keyboard layouts the physical number keys with
+            // modifiers may produce different `code` values but `key` will be
+            // the visible character (e.g. '1','2'). Support Alt+Shift+'1'..'5'
+            // via event.key so Alt+Shift+2 works regardless of layout.
+            if (event.altKey && event.shiftKey) {
+                const keyDigitMatch = /^[1-5]$/.exec(event.key);
+                if (keyDigitMatch) {
+                    event.preventDefault();
+                    const idx = parseInt(keyDigitMatch[0], 10) - 1;
+                    if (idx >= 0 && idx < VELOCITY_SCALE.length) {
+                        const newScale = VELOCITY_SCALE[idx].scale;
+                        setVelocityScale(newScale);
+                        velocityScaleRef.current = newScale;
+                        FunctionProvider.velocityScale = newScale;
+                    }
+                    return;
+                }
+            }
+
+            // Next, handle UI/global shortcuts (non-robot interactions)
+            // All of these map keyboard keys to the same handlers used by the UI
+            switch (event.code) {
+                // Toggle customization mode
+                case "KeyC":
+                    if (!props.customizationEnabled) {
+                        break;
+                    }
+                    event.preventDefault();
+                    handleToggleCustomize();
+                    break;
+
+                // Cycle action mode: Q = previous, E = next
+                case "KeyQ": {
+                    event.preventDefault();
+                    const modes = Object.values(ActionMode);
+                    const idx = modes.indexOf(layout.current.actionMode);
+                    const prev = modes[(idx - 1 + modes.length) % modes.length];
+                    setActionMode(prev);
+                    break;
+                }
+                case "KeyE": {
+                    event.preventDefault();
+                    const modes = Object.values(ActionMode);
+                    const idx = modes.indexOf(layout.current.actionMode);
+                    const next = modes[(idx + 1) % modes.length];
+                    setActionMode(next);
+                    break;
+                }
+
+                // Adjust velocity scale: Minus = decrease, Equal (=) = increase
+                case "Minus": {
+                    if (!(event.altKey && event.shiftKey)) break;
+                    break;
+                }
+                case "Equal": {
+                    if (!(event.altKey && event.shiftKey)) break;
+                    break;
+                }
+
+                // Quick set velocity presets: Alt+Shift+Digit1..5 map to the five presets
+                case "Digit1":
+                case "Digit2":
+                case "Digit3":
+                case "Digit4":
+                case "Digit5": {
+                    if (!(event.altKey && event.shiftKey)) break;
+                    event.preventDefault();
+                    const idx = parseInt(event.code.replace("Digit", "")) - 1;
+                    if (idx >= 0 && idx < VELOCITY_SCALE.length) {
+                        const newScale = VELOCITY_SCALE[idx].scale;
+                        setVelocityScale(newScale);
+                        velocityScaleRef.current = newScale;
+                        FunctionProvider.velocityScale = newScale;
+                    }
+                    break;
+                }
+
+                // Step velocity while in menu: Alt+Shift+Comma => prev, Alt+Shift+Period => next
+                case "Comma": {
+                    if (!(event.altKey && event.shiftKey)) break;
+                    event.preventDefault();
+                    {
+                        // Find the nearest preset index to the current velocityScale
+                        let idx = 0;
+                        let bestDiff = Infinity;
+                        for (let i = 0; i < VELOCITY_SCALE.length; i++) {
+                            const diff = Math.abs(
+                                VELOCITY_SCALE[i].scale -
+                                    velocityScaleRef.current
+                            );
+                            if (diff < bestDiff) {
+                                bestDiff = diff;
+                                idx = i;
+                            }
+                        }
+
+                        const prev =
+                            (idx - 1 + VELOCITY_SCALE.length) %
+                            VELOCITY_SCALE.length;
+                        const newScale = VELOCITY_SCALE[prev].scale;
+                        setVelocityScale(newScale);
+                        velocityScaleRef.current = newScale;
+                        FunctionProvider.velocityScale = newScale;
+                    }
+                    break;
+                }
+                case "Period": {
+                    if (!(event.altKey && event.shiftKey)) break;
+                    event.preventDefault();
+                    {
+                        // Find the nearest preset index to the current velocityScale
+                        let idx = 0;
+                        let bestDiff = Infinity;
+                        for (let i = 0; i < VELOCITY_SCALE.length; i++) {
+                            const diff = Math.abs(
+                                VELOCITY_SCALE[i].scale -
+                                    velocityScaleRef.current
+                            );
+                            if (diff < bestDiff) {
+                                bestDiff = diff;
+                                idx = i;
+                            }
+                        }
+
+                        const next = (idx + 1) % VELOCITY_SCALE.length;
+                        const newScale = VELOCITY_SCALE[next].scale;
+                        setVelocityScale(newScale);
+                        FunctionProvider.velocityScale = newScale;
+                    }
+                    break;
+                }
+
+                // Layout dropdown keyboard: Alt+Shift+L opens the layout dropdown
+                case "KeyL": {
+                    if (!(event.altKey && event.shiftKey)) break;
+                    event.preventDefault();
+                    setLayoutDropdownOpen(true);
+                    break;
+                }
+
+                // When layout dropdown is open, Alt+Shift+Digit7/8/9 select option 1/2/3 (camera, default1, default2)
+                case "Digit7":
+                case "Digit8":
+                case "Digit9": {
+                    if (!(event.altKey && event.shiftKey)) break;
+                    if (!layoutDropdownOpen) break;
+                    event.preventDefault();
+                    const mapToIdx = (code: string) => {
+                        // map Digit7->0, Digit8->1, Digit9->2
+                        return parseInt(code.replace("Digit", "")) - 7;
+                    };
+                    const selected = mapToIdx(event.code);
+                    if (selected < 0) break;
+                    handleLayoutSelectIndex(selected);
+                    setLayoutDropdownOpen(false);
+                    break;
+                }
+
+                // Toggle movement recorder (P)
+                case "KeyP":
+                    event.preventDefault();
+                    setDisplayMovementRecorder(
+                        !layout.current.displayMovementRecorder
+                    );
+                    break;
+
+                // Toggle text-to-speech (Z)
+                case "KeyZ":
+                    event.preventDefault();
+                    setDisplayTextToSpeech(!layout.current.displayTextToSpeech);
+                    break;
+
+                // Toggle labels (B)
+                case "KeyB":
+                    event.preventDefault();
+                    setDisplayLabels(!layout.current.displayLabels);
+                    break;
+
+                default:
+                    // Unhandled key
+                    break;
+            }
+        }
+
+        function handleKeyUp(event: KeyboardEvent) {
+            const button = getShortcutButton(event);
+            if (button) {
+                keyboardFunctionProvider.stopKeyboardShortcut(button);
+            }
+            pressedKeys.delete(event.code);
+        }
+
+        function handleBlur() {
+            KEYBOARD_SHORTCUTS &&
+                Object.values(KEYBOARD_SHORTCUTS).forEach((button) =>
+                    keyboardFunctionProvider.stopKeyboardShortcut(button)
+                );
+            pressedKeys.clear();
+        }
+
+        window.addEventListener(
+            "keydown",
+            handleKeyDown,
+            shortcutListenerOptions
+        );
+        window.addEventListener("keyup", handleKeyUp, shortcutListenerOptions);
+        window.addEventListener("blur", handleBlur);
+        return () => {
+            window.removeEventListener(
+                "keydown",
+                handleKeyDown,
+                shortcutListenerOptions
+            );
+            window.removeEventListener(
+                "keyup",
+                handleKeyUp,
+                shortcutListenerOptions
+            );
+            window.removeEventListener("blur", handleBlur);
+        };
+    }, [customizing, robotNotHomed]);
 
     const layout = React.useRef<LayoutDefinition>(props.layout);
 
@@ -218,12 +751,17 @@ export const Operator = (props: {
             throw Error("Active definition undefined on drop event");
         let newPath: string = path;
         if (!selectedPath) {
-            // New element not already in the layout
-            newPath = addToLayout(selectedDefinition, path, layout.current);
+            // New element from the sidebar. Clone it so repeated adds do not
+            // share the same mutable definition object.
+            const definitionToAdd =
+                cloneComponentDefinition(selectedDefinition);
+            addToLayout(definitionToAdd, path, layout.current);
+            setSelectedDef(undefined);
+            setSelectedPath(undefined);
         } else {
             newPath = moveInLayout(selectedPath, path, layout.current);
+            setSelectedPath(newPath);
         }
-        setSelectedPath(newPath);
         console.log("new active path", newPath);
         updateLayout();
     }
@@ -269,6 +807,9 @@ export const Operator = (props: {
      * Callback when the customization button is clicked.
      */
     const handleToggleCustomize = () => {
+        if (!props.customizationEnabled) {
+            return;
+        }
         if (customizing) {
             console.log("saving layout");
             props.storageHandler.saveCurrentLayout(layout.current);
@@ -299,6 +840,12 @@ export const Operator = (props: {
         hasBetaTeleopKit: hasBetaTeleopKit,
         stretchTool: stretchTool,
         robotNotHomed: robotNotHomed,
+        onLayoutChange: (newLayout?: LayoutDefinition) => {
+            if (!newLayout) return;
+            layout.current = newLayout;
+            props.storageHandler.saveCurrentLayout(layout.current);
+            updateLayout();
+        },
     };
 
     /** Properties for the global options area of the sidebar */
@@ -320,6 +867,17 @@ export const Operator = (props: {
             updateLayout();
         },
         saveLayout: (layoutName: string) => {
+            if (
+                props.storageHandler
+                    .getDefaultLayoutNames()
+                    .includes(layoutName)
+            ) {
+                console.error(
+                    `Cannot overwrite default layout "${layoutName}". ` +
+                        `Please choose a different name.`
+                );
+                return;
+            }
             props.storageHandler.saveCustomLayout(layout.current, layoutName);
         },
     };
@@ -339,7 +897,6 @@ export const Operator = (props: {
                     showActive
                     placement="bottom"
                 />
-                <AudioControl remoteStreams={remoteStreams} />
                 <SpeedControl
                     scale={velocityScale}
                     onChange={(newScale: number) => {
@@ -347,11 +904,86 @@ export const Operator = (props: {
                         FunctionProvider.velocityScale = newScale;
                     }}
                 />
-                <CustomizeButton
-                    customizing={customizing}
-                    onClick={handleToggleCustomize}
-                />
+                {/* Base uses the same SpeedControl as arm/wrist/gripper */}
+                {/* Load layout dropdown (shows current layout name when matched) */}
+                {(() => {
+                    const defaultNames =
+                        props.storageHandler.getDefaultLayoutNames();
+                    const customNames =
+                        props.storageHandler.getCustomLayoutNames();
+                    const combinedNames = defaultNames.concat(customNames);
+
+                    // Try to find a matching name for the currently loaded layout by
+                    // comparing serialized definitions. If no match, leave undefined so
+                    // the dropdown shows a placeholder.
+                    let matchedIndex: number | undefined = undefined;
+                    try {
+                        const currentJson = JSON.stringify(layout.current);
+
+                        // Check defaults
+                        for (let i = 0; i < defaultNames.length; i++) {
+                            const def = props.storageHandler.loadDefaultLayout(
+                                defaultNames[i] as any
+                            );
+                            if (JSON.stringify(def) === currentJson) {
+                                matchedIndex = i;
+                                break;
+                            }
+                        }
+
+                        // Check customs
+                        if (matchedIndex === undefined) {
+                            for (let i = 0; i < customNames.length; i++) {
+                                const def =
+                                    props.storageHandler.loadCustomLayout(
+                                        customNames[i]
+                                    );
+                                if (JSON.stringify(def) === currentJson) {
+                                    matchedIndex = defaultNames.length + i;
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // If loading custom layouts throws for some reason, ignore and
+                        // fall back to placeholder behavior.
+                        matchedIndex = undefined;
+                    }
+
+                    return (
+                        <Dropdown
+                            onChange={(idx) => handleLayoutSelectIndex(idx)}
+                            selectedIndex={matchedIndex}
+                            possibleOptions={combinedNames}
+                            placeholderText={
+                                matchedIndex === undefined
+                                    ? "Current Layout"
+                                    : undefined
+                            }
+                            showActive
+                            placement="bottom"
+                            open={layoutDropdownOpen}
+                            onOpenChange={setLayoutDropdownOpen}
+                        />
+                    );
+                })()}
+                {props.customizationEnabled && (
+                    <CustomizeButton
+                        customizing={customizing}
+                        onClick={handleToggleCustomize}
+                        showText={false}
+                    />
+                )}
             </div>
+            <LoadLayoutModal
+                defaultLayouts={Object.keys(DEFAULT_LAYOUTS)}
+                customLayouts={props.storageHandler.getCustomLayoutNames()}
+                loadLayout={(name: string, dflt: boolean) =>
+                    globalOptionsProps.loadLayout(name, dflt)
+                }
+                setShow={setShowLoadLayoutModal}
+                show={showLoadLayoutModal}
+            />
             {robotNotHomed && (
                 <div className="operator-collision-alerts">
                     <div
@@ -366,7 +998,7 @@ export const Operator = (props: {
                     </div>
                 </div>
             )}
-            {
+            {buttonCollision.length > 0 && (
                 <div className="operator-collision-alerts">
                     <div
                         className={className("operator-alert", {
@@ -384,7 +1016,7 @@ export const Operator = (props: {
                         </Alert>
                     </div>
                 </div>
-            }
+            )}
             {moveBaseState && (
                 <div className="operator-collision-alerts">
                     <div
@@ -456,15 +1088,17 @@ export const Operator = (props: {
             <div id="operator-body">
                 <LayoutArea layout={layout.current} sharedState={sharedState} />
             </div>
-            <Sidebar
-                hidden={!customizing}
-                onDelete={handleDelete}
-                updateLayout={updateLayout}
-                onSelect={handleSelect}
-                selectedDefinition={selectedDefinition}
-                selectedPath={selectedPath}
-                globalOptionsProps={globalOptionsProps}
-            />
+            {props.customizationEnabled && (
+                <Sidebar
+                    hidden={!customizing}
+                    onDelete={handleDelete}
+                    updateLayout={updateLayout}
+                    onSelect={handleSelect}
+                    selectedDefinition={selectedDefinition}
+                    selectedPath={selectedPath}
+                    globalOptionsProps={globalOptionsProps}
+                />
+            )}
         </div>
     );
 };

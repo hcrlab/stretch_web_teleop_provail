@@ -16,7 +16,7 @@ export class PredictiveDisplayFunctionProvider extends FunctionProvider {
      * @returns the {@link PredictiveDisplayFunctions} for the action modes
      */
     public provideFunctions(
-        setActiveCallback: (active: boolean) => void,
+        setActiveCallback: (active: boolean) => void
     ): PredictiveDisplayFunctions {
         const baseLinVel =
             JOINT_VELOCITIES["translate_mobile_base"]! *
@@ -30,7 +30,7 @@ export class PredictiveDisplayFunctionProvider extends FunctionProvider {
                     onClick: (length: number, angle: number) => {
                         this.incrementalBaseDrive(
                             baseLinVel * length,
-                            baseAngVel * angle,
+                            baseAngVel * angle
                         );
                         setActiveCallback(true);
                         setTimeout(() => setActiveCallback(false), 1000);
@@ -45,7 +45,7 @@ export class PredictiveDisplayFunctionProvider extends FunctionProvider {
                     onClick: (length: number, angle: number) => {
                         this.continuousBaseDrive(
                             baseLinVel * length,
-                            baseAngVel * angle,
+                            baseAngVel * angle
                         );
                         setActiveCallback(true);
                     },
@@ -53,7 +53,7 @@ export class PredictiveDisplayFunctionProvider extends FunctionProvider {
                         this.activeVelocityAction
                             ? this.continuousBaseDrive(
                                   baseLinVel * length,
-                                  baseAngVel * angle,
+                                  baseAngVel * angle
                               )
                             : null,
                     onRelease: () => {
@@ -74,7 +74,7 @@ export class PredictiveDisplayFunctionProvider extends FunctionProvider {
                         } else {
                             this.continuousBaseDrive(
                                 baseLinVel * length,
-                                baseAngVel * angle,
+                                baseAngVel * angle
                             );
                             setActiveCallback(true);
                         }
@@ -83,7 +83,7 @@ export class PredictiveDisplayFunctionProvider extends FunctionProvider {
                         if (this.activeVelocityAction) {
                             this.continuousBaseDrive(
                                 baseLinVel * length,
-                                baseAngVel * angle,
+                                baseAngVel * angle
                             );
                         }
                     },

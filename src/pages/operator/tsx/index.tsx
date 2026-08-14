@@ -7,6 +7,7 @@ import {
     RobotPose,
     ROSOccupancyGrid,
     StretchTool,
+    ValidJoints,
     delay,
     getStretchTool,
     waitUntil,
@@ -34,6 +35,7 @@ import "operator/css/index.css";
 import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
 import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
 import { waitUntilAsync } from "../../../shared/util";
+import { KeyboardFunctionProvider } from "./function_providers/KeyboardFunctionProvider";
 
 let allRemoteStreams: Map<string, RemoteStream> = new Map<
     string,
@@ -51,6 +53,7 @@ const isMockOperator = new URL(window.location.href).searchParams.has("mock");
 // Create the function providers. These abstract the logic between the React
 // components and remote robot.
 export var buttonFunctionProvider = new ButtonFunctionProvider();
+export var keyboardFunctionProvider = new KeyboardFunctionProvider();
 export var predicitiveDisplayFunctionProvider =
     new PredictiveDisplayFunctionProvider();
 export var underVideoFunctionProvider = new UnderVideoFunctionProvider();
@@ -98,6 +101,7 @@ if (isMockOperator) {
         while (!connected) {
             connection.hangup();
 
+            // Attempt to join robot room
             let joinedRobotRoom = await connection.addOperatorToRobotRoom();
             if (!joinedRobotRoom) {
                 console.log("Operator failed to join robot room");
@@ -105,6 +109,7 @@ if (isMockOperator) {
                 continue;
             }
 
+            // Wait for WebRTC connection to resolve, timeout after 10 seconds
             let isResolved = await waitUntil(
                 () => connection.connectionState() == "connected",
                 10000,
@@ -115,6 +120,7 @@ if (isMockOperator) {
                 continue;
             }
 
+            // Wait for data to flow through the data channel, timeout after 10 seconds
             connected = await waitUntilAsync(
                 async () => await connection.isConnected(),
                 10000,
@@ -125,7 +131,7 @@ if (isMockOperator) {
                 continue;
             }
 
-            await delay(1000);
+            await delay(1000); // 1 second delay to allow data to flow through data channel
             initializeOperator();
             resolve();
         }
@@ -198,6 +204,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             break;
         case "amclPose":
             remoteRobot.setMapPose(message.message);
+            break;
+        case "odomPose":
+            remoteRobot.setOdomPose(message.message);
             break;
         case "goalStatus":
             console.log("goalStatus", message.message);
@@ -283,6 +292,7 @@ function configureMockRemoteRobot() {
     remoteRobot = new RemoteRobot({
         robotChannel: (message: cmd) => {
             console.log("[mock robot command]", message);
+            handleMockRobotCommand(message);
         },
     });
     occupancyGrid = undefined;
@@ -318,12 +328,16 @@ function initializeMockOperator() {
     configureMockRemoteRobot();
     initializeOperator();
 
-    window.setTimeout(() => {
+    setTimeout(() => {
         remoteRobot.sensors.setBatteryVoltage(13.1);
         remoteRobot.sensors.setMode("navigation");
         remoteRobot.sensors.setIsHomed(true);
         remoteRobot.sensors.setRunStopState(false);
-        remoteRobot.sensors.checkValidJointState(createMockRobotPose(), {}, {});
+        remoteRobot.sensors.checkValidJointState(
+            createMockRobotPose(),
+            {},
+            {},
+        );
     }, 250);
 }
 
@@ -383,6 +397,25 @@ function createMockRobotPose(): RobotPose {
     };
 }
 
+function handleMockRobotCommand(message: cmd) {
+    switch (message.type) {
+        case "setRunStop":
+            remoteRobot.sensors.setRunStopState(message.toggle);
+            break;
+        case "homeTheRobot":
+            remoteRobot.sensors.setIsHomed(true);
+            break;
+        case "incrementalMove": {
+            const pose = createMockRobotPose();
+            pose[message.jointName as ValidJoints] = message.increment;
+            remoteRobot.sensors.checkValidJointState(pose, {}, {});
+            break;
+        }
+        default:
+            break;
+    }
+}
+
 /**
  * Creates a storage handler based on the `storage` property in the process
  * environment.
@@ -416,8 +449,17 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
  * @param storageHandler the storage handler
  */
 function renderOperator(storageHandler: StorageHandler) {
-    const layout = storageHandler.loadCurrentLayoutOrDefault();
+    const url = new URL(window.location.href);
+    const requestedLayoutInput = url.searchParams.get("view");
+    const customizationEnabled = url.searchParams.get("customization")?.toLowerCase() !== "false";
+    const requestedLayoutName = requestedLayoutInput?.replace(/-/g, " ");
+    const requestedLayout = requestedLayoutName
+        ? storageHandler.loadLayout(requestedLayoutName) 
+        : null;
+    const layout = requestedLayout || storageHandler.loadCurrentLayoutOrDefault();
     FunctionProvider.initialize(DEFAULT_VELOCITY_SCALE, layout.actionMode);
+
+
 
     !isMobile
         ? root.render(
@@ -425,6 +467,7 @@ function renderOperator(storageHandler: StorageHandler) {
                   remoteStreams={allRemoteStreams}
                   layout={layout}
                   storageHandler={storageHandler}
+                  customizationEnabled={customizationEnabled}
               />,
           )
         : root.render(

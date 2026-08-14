@@ -33,6 +33,7 @@ export class RemoteRobot extends React.Component<{}, any> {
     isRunStopped: boolean;
     batteryVoltage: number;
     mapPose: ROSLIB.Transform;
+    odomPose?: ROSLIB.Transform;
     moveBaseGoalReached: boolean;
     moveBaseState?: string;
 
@@ -217,6 +218,14 @@ export class RemoteRobot extends React.Component<{}, any> {
 
     getMapPose() {
         return this.mapPose;
+    }
+
+    setOdomPose(pose: ROSLIB.Transform) {
+        this.odomPose = pose;
+    }
+
+    getOdomPose() {
+        return this.odomPose;
     }
 
     stopTrajectory() {

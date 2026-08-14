@@ -98,7 +98,7 @@ function componentDescription(definition: ComponentDefinition): string {
             return definition.type;
         default:
             throw Error(
-                `Cannot get description for component type ${definition.type}\nYou may need to add a case for this component in the switch statement.`,
+                `Cannot get description for component type ${definition.type}\nYou may need to add a case for this component in the switch statement.`
             );
     }
 }
@@ -158,7 +158,7 @@ const SidebarGlobalOptions = (props: GlobalOptionsProps) => {
                     on={!props.displayMovementRecorder}
                     onClick={() =>
                         props.setDisplayMovementRecorder(
-                            !props.displayMovementRecorder,
+                            !props.displayMovementRecorder
                         )
                     }
                     label="Display movement recorder"
@@ -195,7 +195,7 @@ const SidebarGlobalOptions = (props: GlobalOptionsProps) => {
 };
 
 /** Popup so the user can load a default layout or one of their custom layouts.  */
-const LoadLayoutModal = (props: {
+export const LoadLayoutModal = (props: {
     defaultLayouts: string[];
     customLayouts: string[];
     loadLayout: (layoutName: string, dflt: boolean) => void;
@@ -229,10 +229,10 @@ const LoadLayoutModal = (props: {
     }
 
     const defaultOptions = props.defaultLayouts.map((layoutName) =>
-        mapFunct(layoutName, true),
+        mapFunct(layoutName, true)
     );
     const customOptions = props.customLayouts.map((layoutName) =>
-        mapFunct(layoutName, false),
+        mapFunct(layoutName, false)
     );
 
     return (
@@ -269,7 +269,6 @@ const SaveLayoutModal = (props: {
     function handleAccept() {
         if (name.length > 0) {
             props.saveLayout(name);
-            props.customLayouts.push(name);
         }
         setName("");
     }

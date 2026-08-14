@@ -15,6 +15,7 @@ import {
 } from "./CustomizableComponent";
 import "operator/css/Panel.css";
 import AddCircleIcon from "@mui/icons-material/AddCircle";
+import { ResizeHandles } from "./ResizeHandles";
 
 /*
 TODO:
@@ -32,6 +33,10 @@ export const Panel = (props: CustomizableComponentProps) => {
     let [activeTab, setActiveTab] = React.useState(0);
     // If should show the popup to name a new tab
     const [showTabModal, setShowTabModal] = React.useState(false);
+    // Incremented when the panel size is changed to force a re-render
+    const [, forceResizeRender] = React.useState(0);
+    const containerRef = React.useRef<HTMLDivElement>(null);
+
     const definition = props.definition as PanelDefinition;
     const countChildren = definition.children.length;
 
@@ -54,10 +59,11 @@ export const Panel = (props: CustomizableComponentProps) => {
     }
 
     // Should take up screen size proportional to number of children
-    const flex =
+    const defaultFlex =
         activeTabDef.label === "Safety"
             ? 1
             : Math.max(activeTabDef.children.length + 1, 1);
+    const panelFlex = definition.flexGrow ?? defaultFlex;
 
     /** Props for rendering the children elements inside the active tab */
     const componentListProps: ComponentListProps = {
@@ -169,15 +175,38 @@ export const Panel = (props: CustomizableComponentProps) => {
         );
     }
 
+    function getPanelSize() {
+        const rect = containerRef.current?.getBoundingClientRect();
+        return {
+            width: definition.width ?? rect?.width ?? 400,
+            height: definition.height ?? rect?.height ?? 300,
+        };
+    }
+
+    function onPanelResize(width: number, height: number) {
+        definition.width = width;
+        definition.height = height;
+        forceResizeRender((v) => v + 1);
+    }
+
     const thisSelected = childTabSelected === -1;
+
+    // When explicit pixel size is set use it; otherwise fall back to flexGrow
+    const containerStyle: React.CSSProperties = definition.height
+        ? {
+              flex: `0 0 ${definition.height}px`,
+              ...(definition.width ? { width: `${definition.width}px` } : {}),
+          }
+        : { flex: `${panelFlex} ${panelFlex} 0px` };
 
     return (
         <div
+            ref={containerRef}
             className={className("tabs-component", {
                 customizing: props.sharedState.customizing,
                 selected: thisSelected,
             })}
-            style={{ flex: `${flex} ${flex} 0` }}
+            style={containerStyle}
         >
             <div className="tabs-header">
                 {definition.children.map(mapTabLabels)}
@@ -206,6 +235,14 @@ export const Panel = (props: CustomizableComponentProps) => {
                 setShow={setShowTabModal}
                 addTab={addTab}
             />
+            {props.sharedState.customizing && thisSelected ? (
+                <ResizeHandles
+                    getSize={getPanelSize}
+                    onResize={onPanelResize}
+                    onLayoutChange={props.sharedState.onLayoutChange}
+                    containerRef={containerRef}
+                />
+            ) : undefined}
         </div>
     );
 };

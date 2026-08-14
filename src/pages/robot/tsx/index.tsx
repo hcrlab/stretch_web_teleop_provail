@@ -18,6 +18,7 @@ import {
     ROSOccupancyGrid,
     OccupancyGridMessage,
     MapPoseMessage,
+    OdomPoseMessage,
     GoalStatusMessage,
     ActionState,
     ActionStateMessage,
@@ -45,6 +46,7 @@ export const robot = new Robot({
     showTabletResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "showTabletState"),
     amclPoseCallback: forwardAMCLPose,
+    odomPoseCallback: forwardOdomPose,
     modeCallback: forwardMode,
     isHomedCallback: forwardIsHomed,
     isRunStoppedCallback: forwardIsRunStopped,
@@ -253,6 +255,15 @@ function forwardAMCLPose(transform: ROSLIB.Transform) {
         type: "amclPose",
         message: transform,
     } as MapPoseMessage);
+}
+
+function forwardOdomPose(transform: ROSLIB.Transform) {
+    if (!connection) throw "WebRTC connection undefined";
+
+    connection.sendData({
+        type: "odomPose",
+        message: transform,
+    } as OdomPoseMessage);
 }
 
 function handleMessage(message: WebRTCMessage) {

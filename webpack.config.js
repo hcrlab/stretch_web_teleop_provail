@@ -41,10 +41,8 @@ module.exports = (env) => {
             // https://github.com/webpack/changelog-v5/issues/10
             new webpack.ProvidePlugin({
                 Buffer: ["buffer", "Buffer"],
+                process: "process/browser",
             }),
-            // new webpack.ProvidePlugin({
-            //   process: 'process/browser',
-            // }),
             new webpack.DefinePlugin(envKeys),
         ].concat(
             pages.map(

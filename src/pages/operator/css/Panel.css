@@ -68,6 +68,33 @@
     color: white;
 }
 
+.panel-resize-controls {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: stretch;
+    gap: 0.15rem;
+    padding: 0.15rem;
+    background-color: var(--tab-inactive);
+    border-radius: var(--radius) var(--radius) 0px 0px;
+    z-index: 4;
+}
+
+.panel-resize-controls button {
+    min-width: 2.2rem;
+    min-height: 2rem;
+    border: 1px solid var(--btn-blue);
+    border-radius: 0.2rem;
+    background-color: var(--background-color);
+    color: var(--font-black);
+    cursor: pointer;
+}
+
+.panel-resize-controls button:hover,
+.panel-resize-controls button:focus-visible {
+    background-color: var(--btn-turquoise);
+    color: var(--font-white);
+}
+
 /* Popup for adding a new tab *************************************************/
 
 @media (max-width: 900px) {

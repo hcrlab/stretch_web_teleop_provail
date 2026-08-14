@@ -121,6 +121,7 @@ export const MobileOperator = (props: {
     const sharedState: SharedState = {
         customizing: false,
         onSelect: () => {},
+        onLayoutChange: () => {},
         remoteStreams: remoteStreams,
         selectedPath: "deselected",
         dropZoneState: {

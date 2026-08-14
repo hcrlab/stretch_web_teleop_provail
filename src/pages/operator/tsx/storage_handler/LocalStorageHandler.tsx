@@ -34,7 +34,9 @@ export class LocalStorageHandler extends StorageHandler {
         layoutName: string,
     ): void {
         const layoutNames = this.getCustomLayoutNames();
-        layoutNames.push(layoutName);
+        if (!layoutNames.includes(layoutName)) {
+            layoutNames.push(layoutName);
+        }
         localStorage.setItem(
             LocalStorageHandler.LAYOUT_NAMES_KEY,
             JSON.stringify(layoutNames),
