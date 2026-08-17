@@ -48,6 +48,7 @@ import "operator/css/Operator.css";
 import { TextToSpeech } from "./layout_components/TextToSpeech";
 import { HomeTheRobot } from "./layout_components/HomeTheRobot";
 import { VoiceControl } from "./static_components/VoiceControl";
+import { ENABLE_VOICE_CONTROL } from "shared/feature_flags";
 
 const KEYBOARD_SHORTCUTS: Record<string, ButtonPadButton> = {
     KeyW: ButtonPadButton.BaseForward,
@@ -1063,9 +1064,11 @@ export const Operator = (props: {
                 </div>
             )}
             <div id="operator-global-controls">
-                <div className="operator-voice">
-                    <VoiceControl />
-                </div>
+                {ENABLE_VOICE_CONTROL && (
+                    <div className="operator-voice">
+                        <VoiceControl />
+                    </div>
+                )}
                 <div
                     className={className("operator-pose-recorder", {
                         hideLabels: !layout.current.displayLabels,

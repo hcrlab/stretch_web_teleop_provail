@@ -44,6 +44,7 @@ import { CheckToggleButton } from "./basic_components/CheckToggleButton";
 import { UnderVideoButton } from "./function_providers/UnderVideoFunctionProvider";
 import { Alert } from "./basic_components/Alert";
 import { VoiceControl } from "./static_components/VoiceControl";
+import { ENABLE_VOICE_CONTROL } from "shared/feature_flags";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -301,7 +302,7 @@ export const MobileOperator = (props: {
                             <span className="material-icons">map</span>
                         </button>
                     </div>
-                    <VoiceControl compact />
+                    {ENABLE_VOICE_CONTROL && <VoiceControl compact />}
                     {cameraID == CameraViewId.realsense && (
                         <div className="depth-sensing">
                             <CheckToggleButton
