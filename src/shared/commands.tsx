@@ -9,6 +9,7 @@ export type cmd =
     | CameraPerspectiveCommand
     | RobotPoseCommand
     | ToggleCommand
+    | SwingGolfClubCommand
     | LookAtGripper
     | GetOccupancyGrid
     | MoveBaseCommand
@@ -74,6 +75,10 @@ export interface ToggleCommand {
         | "setRealsenseBodyPoseEstimate"
         | "setRunStop";
     toggle: boolean;
+}
+
+export interface SwingGolfClubCommand {
+    type: "swingGolfClub";
 }
 
 export interface LookAtGripper {

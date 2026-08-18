@@ -16,6 +16,7 @@ import {
     PlayTextToSpeech,
     StopTextToSpeech,
     HomeTheRobotCommand,
+    SwingGolfClubCommand,
 } from "shared/commands";
 import {
     ValidJointStateDict,
@@ -281,6 +282,14 @@ export class RemoteRobot extends React.Component<{}, any> {
     homeTheRobot() {
         let cmd: HomeTheRobotCommand = {
             type: "homeTheRobot",
+        };
+        this.robotChannel(cmd);
+    }
+
+    /** Release wrist-roll torque for a gravity-driven golf swing. */
+    swingGolfClub() {
+        const cmd: SwingGolfClubCommand = {
+            type: "swingGolfClub",
         };
         this.robotChannel(cmd);
     }

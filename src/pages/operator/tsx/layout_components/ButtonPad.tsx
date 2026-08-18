@@ -139,6 +139,9 @@ export const ButtonPad = (props: ButtonPadProps) => {
             >
                 {paths.map(mapPaths)}
             </svg>
+            {id === ButtonPadId.DexWrist && (
+                <GolfSwingButton sharedState={props.sharedState} />
+            )}
             {customizing && !overlay && selected ? (
                 <ResizeHandles
                     getSize={getSize}
@@ -148,6 +151,28 @@ export const ButtonPad = (props: ButtonPadProps) => {
                 />
             ) : undefined}
         </div>
+    );
+};
+
+const GolfSwingButton = (props: { sharedState: SharedState }) => {
+    const button = ButtonPadButton.SwingGolfClub;
+    const functions = buttonFunctionProvider.provideFunctions(button);
+    const active =
+        props.sharedState.buttonStateMap?.get(button) === ButtonState.Active;
+    const disabled =
+        props.sharedState.customizing ||
+        props.sharedState.robotNotHomed ||
+        active;
+
+    return (
+        <button
+            className="button golf-swing-button"
+            disabled={disabled}
+            onClick={functions.onClick}
+            title="Release wrist-roll torque and restore it after the club stops swinging"
+        >
+            {active ? "Club swinging…" : "Swing golf club"}
+        </button>
     );
 };
 

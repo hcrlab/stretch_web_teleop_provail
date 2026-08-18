@@ -28,6 +28,7 @@ export enum ButtonPadButton {
     WristPitchDown = "Wrist pitch down",
     WristRollLeft = "Wrist roll left",
     WristRollRight = "Wrist roll right",
+    SwingGolfClub = "Swing golf club",
     CameraTiltUp = "Camera tilt up",
     CameraTiltDown = "Camera tilt down",
     CameraPanLeft = "Camera pan left",
@@ -381,6 +382,19 @@ export class ButtonFunctionProvider extends FunctionProvider {
     public provideFunctions(
         buttonPadFunction: ButtonPadButton
     ): ButtonFunctions {
+        if (buttonPadFunction === ButtonPadButton.SwingGolfClub) {
+            return {
+                onClick: () => {
+                    FunctionProvider.remoteRobot?.swingGolfClub();
+                    this.setButtonActiveState(buttonPadFunction);
+                    setTimeout(
+                        () => this.setButtonInactiveState(buttonPadFunction),
+                        20000
+                    );
+                },
+            };
+        }
+
         let action: () => void;
         const onLeave = () => {
             this.stopCurrentAction();

@@ -26,6 +26,11 @@ export var rosConnected = false;
 const moveBaseActionName = "/navigate_to_pose";
 const moveToPregraspActionName = "/move_to_pregrasp";
 const showTabletActionName = "/show_tablet";
+const WRIST_ROLL_MOVING_VELOCITY_RAD_S = 0.05;
+const WRIST_ROLL_STOPPED_VELOCITY_RAD_S = 0.03;
+const WRIST_ROLL_STOPPED_SAMPLE_COUNT = 8;
+const WRIST_ROLL_MIN_FREE_TIME_MS = 1000;
+const WRIST_ROLL_MAX_FREE_TIME_MS = 20000;
 
 export class Robot extends React.Component {
     private ros: ROSLIB.Ros;
@@ -54,6 +59,13 @@ export class Robot extends React.Component {
     private setRealsenseShowBodyPoseService?: ROSLIB.Service;
     private setComputeBodyPoseService?: ROSLIB.Service;
     private setRunStopService?: ROSLIB.Service;
+    private setWristRollTorqueService?: ROSLIB.Service;
+    private wristRollSwing?: {
+        startedAt: number;
+        hasMoved: boolean;
+        stoppedSamples: number;
+        timeout: ReturnType<typeof setTimeout>;
+    };
     private robotFrameTfClient?: ROSLIB.TFClient;
     private mapFrameTfClient?: ROSLIB.TFClient;
     private linkGripperFingerLeftTF?: ROSLIB.Transform;
@@ -299,6 +311,7 @@ export class Robot extends React.Component {
         this.createRealsenseShowBodyPoseService();
         this.createComputeBodyPoseService();
         this.createRunStopService();
+        this.createWristRollTorqueService();
         this.createRobotFrameTFClient();
         this.createMapFrameTFClient();
         this.subscribeToHeadTiltTF();
@@ -331,6 +344,7 @@ export class Robot extends React.Component {
 
         jointStateTopic.subscribe((msg: ROSJointState) => {
             this.jointState = msg;
+            this.updateGolfSwing(msg);
             let robotPose: RobotPose = rosJointStatetoRobotPose(
                 this.jointState,
             );
@@ -683,6 +697,14 @@ export class Robot extends React.Component {
         });
     }
 
+    createWristRollTorqueService() {
+        this.setWristRollTorqueService = new ROSLIB.Service({
+            ros: this.ros,
+            name: "/wrist_roll_torque",
+            serviceType: "std_srvs/srv/SetBool",
+        });
+    }
+
     createRobotFrameTFClient() {
         this.robotFrameTfClient = new ROSLIB.TFClient({
             ros: this.ros,
@@ -851,6 +873,93 @@ export class Robot extends React.Component {
     setRunStop(toggle: boolean) {
         var request = new ROSLIB.ServiceRequest({ data: toggle });
         this.setRunStopService?.callService(request, (response: boolean) => {});
+    }
+
+    private setWristRollTorque(
+        enabled: boolean,
+        callback?: (success: boolean) => void,
+    ) {
+        if (!this.setWristRollTorqueService) {
+            console.error("Wrist roll torque service is undefined");
+            callback?.(false);
+            return;
+        }
+
+        const request = new ROSLIB.ServiceRequest({ data: enabled });
+        this.setWristRollTorqueService.callService(request, (response: any) => {
+            if (!response.success) {
+                console.error(
+                    "Failed to set wrist roll torque:",
+                    response.message,
+                );
+            }
+            callback?.(Boolean(response.success));
+        });
+    }
+
+    /**
+     * Release the wrist-roll servo, then restore torque after the gravity-driven
+     * swing has measurably moved and remained nearly stationary for several
+     * joint-state samples. A timeout restores torque if feedback is interrupted.
+     */
+    swingGolfClub() {
+        if (this.wristRollSwing) return;
+
+        this.setWristRollTorque(false, (success) => {
+            if (!success || this.wristRollSwing) return;
+
+            const timeout = setTimeout(() => {
+                console.warn("Golf swing timed out; restoring wrist roll torque");
+                this.finishGolfSwing();
+            }, WRIST_ROLL_MAX_FREE_TIME_MS);
+
+            this.wristRollSwing = {
+                startedAt: Date.now(),
+                hasMoved: false,
+                stoppedSamples: 0,
+                timeout,
+            };
+        });
+    }
+
+    private updateGolfSwing(jointState: ROSJointState) {
+        const swing = this.wristRollSwing;
+        if (!swing) return;
+
+        const index = jointState.name.indexOf("joint_wrist_roll");
+        const velocity = jointState.velocity[index];
+        if (index < 0 || !Number.isFinite(velocity)) return;
+
+        const speed = Math.abs(velocity);
+        if (speed >= WRIST_ROLL_MOVING_VELOCITY_RAD_S) {
+            swing.hasMoved = true;
+            swing.stoppedSamples = 0;
+            return;
+        }
+
+        const minimumFreeTimeElapsed =
+            Date.now() - swing.startedAt >= WRIST_ROLL_MIN_FREE_TIME_MS;
+        if (
+            swing.hasMoved &&
+            minimumFreeTimeElapsed &&
+            speed <= WRIST_ROLL_STOPPED_VELOCITY_RAD_S
+        ) {
+            swing.stoppedSamples += 1;
+            if (swing.stoppedSamples >= WRIST_ROLL_STOPPED_SAMPLE_COUNT) {
+                this.finishGolfSwing();
+            }
+        } else {
+            swing.stoppedSamples = 0;
+        }
+    }
+
+    private finishGolfSwing() {
+        const swing = this.wristRollSwing;
+        if (!swing) return;
+
+        clearTimeout(swing.timeout);
+        this.wristRollSwing = undefined;
+        this.setWristRollTorque(true);
     }
 
     /**
