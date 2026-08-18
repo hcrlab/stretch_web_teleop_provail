@@ -34,6 +34,11 @@ import {
     StretchToolMessage,
 } from "../../../shared/util";
 import { loginFirebaseSignalerAsRobot } from "shared/signaling/get_signaler";
+import {
+    ControlLease,
+    subscribeToControlLease,
+    waitForUser,
+} from "shared/control_lease";
 
 export const robot = new Robot({
     jointStateCallback: forwardJointStates,
@@ -59,6 +64,10 @@ export let navigationStream = new VideoStream(navigationProps);
 export let realsenseStream = new VideoStream(realsenseProps);
 export let gripperStream = new VideoStream(gripperProps);
 export let audioStream = new AudioStream(audioProps);
+let activeControlLease: ControlLease = {
+    activeUserUid: process.env.storage === "firebase" ? null : "local",
+    generation: process.env.storage === "firebase" ? 0 : 1,
+};
 // let occupancyGrid: ROSOccupancyGrid | undefined;
 
 connection = new WebRTCConnection({
@@ -67,6 +76,7 @@ connection = new WebRTCConnection({
     onRobotConnectionStart: handleSessionStart,
     onMessage: handleMessage,
     onConnectionEnd: disconnectFromRobot,
+    onControlRevoked: stopRobotForControlHandoff,
 });
 robot.setOnRosConnectCallback(async () => {
     robot.subscribeToVideo({
@@ -93,9 +103,15 @@ robot.setOnRosConnectCallback(async () => {
     robot.getJointLimits();
 
     console.log(
-        "Waiting for configured signaler (i.e. logging in if using Firebase)",
+        "Waiting for configured signaler (i.e. logging in if using Firebase)"
     );
     await loginFirebaseSignalerAsRobot();
+    if (process.env.storage === "firebase") {
+        const robotUser = await waitForUser();
+        subscribeToControlLease(robotUser.uid, (lease) => {
+            activeControlLease = lease;
+        });
+    }
     await connection.configure_signaler("");
     console.log("Signaler ready! Joining room.");
     let joinedRobotRoom = await connection.joinRobotRoom();
@@ -200,7 +216,7 @@ function forwardStretchTool(value: string) {
 function forwardJointStates(
     robotPose: RobotPose,
     jointValues: ValidJointStateDict,
-    effortValues: ValidJointStateDict,
+    effortValues: ValidJointStateDict
 ) {
     if (!connection) throw "WebRTC connection undefined!";
 
@@ -267,6 +283,21 @@ function forwardOdomPose(transform: ROSLIB.Transform) {
 }
 
 function handleMessage(message: WebRTCMessage) {
+    if (process.env.storage === "firebase") {
+        if (message.type !== "controlledCommand") {
+            console.error("Rejected unauthenticated robot command");
+            return;
+        }
+        if (
+            message.controllerUid !== activeControlLease.activeUserUid ||
+            message.leaseGeneration !== activeControlLease.generation
+        ) {
+            console.error("Rejected command from inactive control lease");
+            stopRobotForControlHandoff();
+            return;
+        }
+        message = message.command;
+    }
     if (!("type" in message)) {
         console.error("Malformed message:", message);
         return;
@@ -336,7 +367,7 @@ function handleMessage(message: WebRTCMessage) {
             robot.executeMoveToPregraspGoal(
                 message.scaled_x,
                 message.scaled_y,
-                message.horizontal,
+                message.horizontal
             );
             break;
         case "stopMoveToPregrasp":
@@ -349,7 +380,7 @@ function handleMessage(message: WebRTCMessage) {
             robot.playTextToSpeech(
                 message.text,
                 message.override_behavior,
-                message.is_slow,
+                message.is_slow
             );
             break;
         case "stopTextToSpeech":
@@ -370,6 +401,16 @@ function handleMessage(message: WebRTCMessage) {
     }
 }
 
+/** Put all ongoing motion in a safe stopped state before changing operators. */
+function stopRobotForControlHandoff() {
+    console.warn("Control lease revoked; stopping robot motion");
+    robot.executeBaseVelocity({ linVel: 0, angVel: 0 });
+    robot.stopTrajectoryClient();
+    robot.stopMoveBaseClient();
+    robot.stopMoveToPregraspClient();
+    robot.stopShowTabletClient();
+}
+
 function disconnectFromRobot() {
     robot.closeROSConnection();
     connection.hangup();
@@ -386,5 +427,5 @@ const root = createRoot(container!); // createRoot(container!) if you use TypeSc
 root.render(
     <AllVideoStreamComponent
         streams={[navigationStream, realsenseStream, gripperStream]}
-    />,
+    />
 );

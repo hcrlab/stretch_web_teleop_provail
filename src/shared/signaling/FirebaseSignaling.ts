@@ -48,6 +48,7 @@ export class FirebaseSignaling extends BaseSignaling {
     private prevSignal;
     private room_uid: string;
     private is_joined: boolean;
+    private leaseUnsubscribe?: () => void;
 
     constructor(props: SignalingProps, config: FirebaseOptions) {
         super(props);
@@ -78,9 +79,9 @@ export class FirebaseSignaling extends BaseSignaling {
                                         // We can ignore the robots the operator cannot access
                                         // console.error(error.message, "Cannot access: ", "robots/" + robo_uid);
                                     });
-                            },
+                            }
                         );
-                    },
+                    }
                 );
             }
         });
@@ -106,6 +107,40 @@ export class FirebaseSignaling extends BaseSignaling {
 
                             this._get_room_uid(room_name).then((room_uid) => {
                                 this.room_uid = room_uid;
+                                if (this.role === "robot") {
+                                    this.leaseUnsubscribe = onValue(
+                                        ref(
+                                            this.db,
+                                            `controlLeases/${this.room_uid}`
+                                        ),
+                                        async (leaseSnapshot) => {
+                                            const activeUserUid =
+                                                leaseSnapshot.val()
+                                                    ?.activeUserUid;
+                                            const operatorSnapshot = await get(
+                                                ref(
+                                                    this.db,
+                                                    `rooms/${this.room_uid}/operator`
+                                                )
+                                            );
+                                            const operator =
+                                                operatorSnapshot.val();
+                                            if (
+                                                operator?.active &&
+                                                operator?.controllerUid !==
+                                                    activeUserUid
+                                            ) {
+                                                await set(
+                                                    ref(
+                                                        this.db,
+                                                        `rooms/${this.room_uid}/operator/active`
+                                                    ),
+                                                    false
+                                                );
+                                            }
+                                        }
+                                    );
+                                }
                                 let opposite_role =
                                     this.role === "robot"
                                         ? "operator"
@@ -116,7 +151,7 @@ export class FirebaseSignaling extends BaseSignaling {
                                         "rooms/" +
                                             this.room_uid +
                                             "/" +
-                                            opposite_role,
+                                            opposite_role
                                     ),
                                     (snapshot) => {
                                         if (this.is_joined) {
@@ -129,7 +164,7 @@ export class FirebaseSignaling extends BaseSignaling {
                                                     !(key in this.prevSignal) ||
                                                     !isEqual(
                                                         currSignal[key],
-                                                        this.prevSignal[key],
+                                                        this.prevSignal[key]
                                                     )
                                                 ) {
                                                     changes[key] =
@@ -141,18 +176,18 @@ export class FirebaseSignaling extends BaseSignaling {
                                             // Trigger callbacks based on what's changed
                                             if (
                                                 Object.keys(changes).includes(
-                                                    "candidate",
+                                                    "candidate"
                                                 ) ||
                                                 Object.keys(changes).includes(
-                                                    "sessionDescription",
+                                                    "sessionDescription"
                                                 ) ||
                                                 Object.keys(changes).includes(
-                                                    "cameraInfo",
+                                                    "cameraInfo"
                                                 )
                                             ) {
                                                 if (
                                                     Object.keys(
-                                                        changes,
+                                                        changes
                                                     ).includes("active")
                                                 ) {
                                                     delete changes["active"];
@@ -161,7 +196,7 @@ export class FirebaseSignaling extends BaseSignaling {
                                             }
                                             if (
                                                 Object.keys(changes).includes(
-                                                    "active",
+                                                    "active"
                                                 ) &&
                                                 !changes["active"]
                                             ) {
@@ -170,12 +205,11 @@ export class FirebaseSignaling extends BaseSignaling {
                                                     update(
                                                         ref(
                                                             this.db,
-                                                            "robots/" +
-                                                                this.uid,
+                                                            "robots/" + this.uid
                                                         ),
                                                         {
                                                             status: "online",
-                                                        },
+                                                        }
                                                     );
                                                 }
                                                 this.onGoodbye();
@@ -183,32 +217,32 @@ export class FirebaseSignaling extends BaseSignaling {
                                             if (
                                                 this.role === "robot" &&
                                                 Object.keys(changes).includes(
-                                                    "active",
+                                                    "active"
                                                 ) &&
                                                 changes["active"]
                                             ) {
                                                 console.log(
-                                                    `Operator has joined the room. My role: ${this.role}.`,
+                                                    `Operator has joined the room. My role: ${this.role}.`
                                                 );
                                                 update(
                                                     ref(
                                                         this.db,
-                                                        "robots/" + this.uid,
+                                                        "robots/" + this.uid
                                                     ),
                                                     {
                                                         status: "occupied",
-                                                    },
+                                                    }
                                                 );
                                                 if (this.onRobotConnectionStart)
                                                     this.onRobotConnectionStart();
                                             }
                                         }
-                                    },
+                                    }
                                 );
 
                                 resolve();
                             });
-                        },
+                        }
                     );
                 }
             });
@@ -220,8 +254,8 @@ export class FirebaseSignaling extends BaseSignaling {
             get(
                 ref(
                     this.db,
-                    "rooms/" + this.room_uid + "/" + this.role + "/active",
-                ),
+                    "rooms/" + this.room_uid + "/" + this.role + "/active"
+                )
             ).then((snapshot) => {
                 let is_active = snapshot.val();
                 if (false) {
@@ -232,11 +266,11 @@ export class FirebaseSignaling extends BaseSignaling {
                     set(
                         ref(
                             this.db,
-                            "rooms/" + this.room_uid + "/" + this.role,
+                            "rooms/" + this.room_uid + "/" + this.role
                         ),
                         {
                             active: true,
-                        },
+                        }
                     ).then(() => {
                         this.is_joined = true;
                         update(ref(this.db, "robots/" + this.uid), {
@@ -255,43 +289,63 @@ export class FirebaseSignaling extends BaseSignaling {
             get(
                 ref(
                     this.db,
-                    "rooms/" + this.room_uid + "/" + opposite_role + "/active",
-                ),
+                    "rooms/" + this.room_uid + "/" + opposite_role + "/active"
+                )
             ).then((snapshot) => {
                 let is_robot_active = snapshot.val();
                 if (!is_robot_active) {
                     console.log("Robot is not active");
                     resolve(false);
                 } else {
-                    get(
-                        ref(
-                            this.db,
-                            "rooms/" +
-                                this.room_uid +
-                                "/" +
-                                this.role +
-                                "/active",
-                        ),
-                    ).then((snapshot2) => {
-                        let is_operator_active = snapshot2.val();
-                        if (is_operator_active) {
-                            console.log("Another operator is already active");
-                            resolve(false);
-                        } else {
-                            set(
+                    get(ref(this.db, `controlLeases/${this.room_uid}`)).then(
+                        (leaseSnapshot) => {
+                            const lease = leaseSnapshot.val();
+                            if (lease?.activeUserUid !== this.uid) {
+                                console.log(
+                                    "This operator does not hold the control lease"
+                                );
+                                resolve(false);
+                                return;
+                            }
+                            get(
                                 ref(
                                     this.db,
-                                    "rooms/" + this.room_uid + "/" + this.role,
-                                ),
-                                {
-                                    active: true,
-                                },
-                            ).then(() => {
-                                this.is_joined = true;
-                                resolve(true);
+                                    "rooms/" +
+                                        this.room_uid +
+                                        "/" +
+                                        this.role +
+                                        "/active"
+                                )
+                            ).then((snapshot2) => {
+                                let is_operator_active = snapshot2.val();
+                                if (is_operator_active) {
+                                    console.log(
+                                        "Another operator is already active"
+                                    );
+                                    resolve(false);
+                                } else {
+                                    set(
+                                        ref(
+                                            this.db,
+                                            "rooms/" +
+                                                this.room_uid +
+                                                "/" +
+                                                this.role
+                                        ),
+                                        {
+                                            active: true,
+                                            controllerUid: this.uid,
+                                            leaseGeneration:
+                                                lease.generation || 0,
+                                        }
+                                    ).then(() => {
+                                        this.is_joined = true;
+                                        resolve(true);
+                                    });
+                                }
                             });
                         }
-                    });
+                    );
                 }
             });
         });
@@ -316,7 +370,7 @@ export class FirebaseSignaling extends BaseSignaling {
         if (this.is_joined) {
             update(
                 ref(this.db, "rooms/" + this.room_uid + "/" + this.role),
-                signal,
+                signal
             );
         }
     }

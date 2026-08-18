@@ -20,6 +20,7 @@ interface WebRTCProps {
     onRobotConnectionStart?: () => void;
     onMessageChannelOpen?: () => void;
     onConnectionEnd?: () => void;
+    onControlRevoked?: () => void;
 }
 
 export class WebRTCConnection extends React.Component {
@@ -61,7 +62,10 @@ export class WebRTCConnection extends React.Component {
         this.stop = this.stop.bind(this);
         this.signaler = createSignaler({
             onSignal: this.onSignal,
-            onGoodbye: this.stop,
+            onGoodbye: () => {
+                if (props.onControlRevoked) props.onControlRevoked();
+                this.stop();
+            },
             onRobotConnectionStart: props.onRobotConnectionStart,
         });
     }
@@ -116,7 +120,7 @@ export class WebRTCConnection extends React.Component {
                 } else {
                     console.error(
                         "Unknown channel opened:",
-                        event.channel.label,
+                        event.channel.label
                     );
                 }
             };
@@ -155,7 +159,7 @@ export class WebRTCConnection extends React.Component {
                 if (this.peerConnection.connectionState === "failed") {
                     console.error(
                         this.peerConnection.connectionState,
-                        "Resetting the PeerConnection",
+                        "Resetting the PeerConnection"
                     );
                     if (this.onConnectionEnd) this.onConnectionEnd();
                     this.createPeerConnection();
@@ -170,14 +174,14 @@ export class WebRTCConnection extends React.Component {
                     "ICE candidate gathering error:",
                     event.errorCode,
                     " ",
-                    event.errorText,
+                    event.errorText
                 );
             };
 
             console.log("Created RTCPeerConnection");
         } catch (e: any) {
             console.error(
-                "Failed to create PeerConnection, exception: " + e.message,
+                "Failed to create PeerConnection, exception: " + e.message
             );
             return;
         }
@@ -314,7 +318,7 @@ export class WebRTCConnection extends React.Component {
 
     onReceiveMessageCallback(event: { data: string }) {
         const obj: WebRTCMessage | WebRTCMessage[] = safelyParseJSON(
-            event.data,
+            event.data
         );
         if (this.onMessage) this.onMessage(obj);
     }

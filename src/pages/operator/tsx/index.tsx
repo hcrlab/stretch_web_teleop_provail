@@ -36,6 +36,14 @@ import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionPro
 import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
 import { waitUntilAsync } from "../../../shared/util";
 import { KeyboardFunctionProvider } from "./function_providers/KeyboardFunctionProvider";
+import {
+    ControlLease,
+    registerWaitingPresence,
+    resolveRobotUid,
+    subscribeToControlLease,
+    waitForUser,
+} from "shared/control_lease";
+import { connectLocalOperatorControl } from "shared/local_control";
 
 let allRemoteStreams: Map<string, RemoteStream> = new Map<
     string,
@@ -49,6 +57,15 @@ export let stretchTool: StretchTool;
 export let occupancyGrid: ROSOccupancyGrid | undefined = undefined;
 export let storageHandler: StorageHandler;
 const isMockOperator = new URL(window.location.href).searchParams.has("mock");
+let controlEnabled = false;
+let currentLease: ControlLease = {
+    activeUserUid: null,
+    generation: 0,
+};
+let currentRobotUid: string | undefined;
+let currentUserUid: string | undefined;
+let connectingToRobot = false;
+let operatorInitialized = false;
 
 // Create the function providers. These abstract the logic between the React
 // components and remote robot.
@@ -73,6 +90,7 @@ root = createRoot(container!);
 
 if (isMockOperator) {
     initializeMockOperator();
+    configureAnonymousControl();
 } else {
     // Create the WebRTC connection and connect the operator room
     connection = new WebRTCConnection({
@@ -97,45 +115,86 @@ if (isMockOperator) {
         await connection.configure_signaler(room_name);
         console.log("Signaler ready!");
 
-        let connected = false;
-        while (!connected) {
-            connection.hangup();
-
-            // Attempt to join robot room
-            let joinedRobotRoom = await connection.addOperatorToRobotRoom();
-            if (!joinedRobotRoom) {
-                console.log("Operator failed to join robot room");
-                await delay(500);
-                continue;
-            }
-
-            // Wait for WebRTC connection to resolve, timeout after 10 seconds
-            let isResolved = await waitUntil(
-                () => connection.connectionState() == "connected",
-                10000,
-            );
-            if (!isResolved) {
-                console.warn("WebRTC connection could not resolve");
-                await delay(500);
-                continue;
-            }
-
-            // Wait for data to flow through the data channel, timeout after 10 seconds
-            connected = await waitUntilAsync(
-                async () => await connection.isConnected(),
-                10000,
-            );
-            if (!connected) {
-                console.warn("No data flowing through data channel");
-                await delay(500);
-                continue;
-            }
-
-            await delay(1000); // 1 second delay to allow data to flow through data channel
-            initializeOperator();
-            resolve();
+        if (process.env.storage === "firebase") {
+            currentUserUid = (await waitForUser()).uid;
+            currentRobotUid = await resolveRobotUid(room_name!);
+            await registerWaitingPresence(currentRobotUid);
+            subscribeToControlLease(currentRobotUid, (lease) => {
+                const wasEnabled = controlEnabled;
+                currentLease = lease;
+                controlEnabled = lease.activeUserUid === currentUserUid;
+                if (wasEnabled && !controlEnabled && connection) {
+                    connection.hangup();
+                }
+                if (!wasEnabled && controlEnabled) connectOperatorToRobot();
+                renderControlState();
+            });
+            renderControlState();
+        } else {
+            configureAnonymousControl();
         }
+
+        connectOperatorToRobot();
+        resolve();
     });
+}
+
+function configureAnonymousControl() {
+    connectLocalOperatorControl((state, operator) => {
+        const wasEnabled = controlEnabled;
+        controlEnabled = state.activeSessionId === operator.sessionId;
+        const activeOperator = state.operators.find(
+            (candidate) => candidate.sessionId === state.activeSessionId
+        );
+        currentLease = {
+            activeUserUid: state.activeSessionId,
+            activeUserName: activeOperator?.displayName,
+            generation: 0,
+        };
+        if (wasEnabled && !controlEnabled && connection) connection.hangup();
+        if (!wasEnabled && controlEnabled && connection)
+            connectOperatorToRobot();
+        renderControlState();
+    });
+}
+
+async function connectOperatorToRobot() {
+    if (!connection || connectingToRobot || !controlEnabled) return;
+    connectingToRobot = true;
+    try {
+        while (controlEnabled) {
+            connection.hangup();
+            const joinedRobotRoom = await connection.addOperatorToRobotRoom();
+            if (!joinedRobotRoom) {
+                await delay(500);
+                continue;
+            }
+            const peerConnected = await waitUntil(
+                () => connection.connectionState() == "connected",
+                10000
+            );
+            if (!peerConnected) {
+                await delay(500);
+                continue;
+            }
+            const dataConnected = await waitUntilAsync(
+                async () => await connection.isConnected(),
+                10000
+            );
+            if (!dataConnected) {
+                await delay(500);
+                continue;
+            }
+            await delay(1000);
+            if (!operatorInitialized) {
+                operatorInitialized = true;
+                initializeOperator();
+            }
+            return;
+        }
+    } finally {
+        connectingToRobot = false;
+    }
 }
 
 /** Handle when the WebRTC connection adds a new track on a camera video stream. */
@@ -174,7 +233,7 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             remoteRobot.sensors.checkValidJointState(
                 message.robotPose,
                 message.jointsInLimits,
-                message.jointsInCollision,
+                message.jointsInCollision
             );
             break;
         case "mode":
@@ -198,7 +257,7 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
                 occupancyGrid = message.message;
             } else {
                 occupancyGrid.data = occupancyGrid.data.concat(
-                    message.message.data,
+                    message.message.data
                 );
             }
             break;
@@ -244,10 +303,10 @@ function initializeOperator() {
     const storageHandlerReadyCallback = () => {
         underMapFunctionProvider = new UnderMapFunctionProvider(storageHandler);
         movementRecorderFunctionProvider = new MovementRecorderFunctionProvider(
-            storageHandler,
+            storageHandler
         );
         textToSpeechFunctionProvider = new TextToSpeechFunctionProvider(
-            storageHandler,
+            storageHandler
         );
         renderOperator(storageHandler);
     };
@@ -260,7 +319,22 @@ function initializeOperator() {
  */
 function configureRemoteRobot() {
     remoteRobot = new RemoteRobot({
-        robotChannel: (message: cmd) => connection.sendData(message),
+        robotChannel: (message: cmd) => {
+            if (!controlEnabled) {
+                console.warn("Blocked robot command: this user is not active");
+                return;
+            }
+            if (process.env.storage === "firebase") {
+                connection.sendData({
+                    type: "controlledCommand",
+                    controllerUid: currentUserUid!,
+                    leaseGeneration: currentLease.generation,
+                    command: message,
+                });
+            } else {
+                connection.sendData(message);
+            }
+        },
     });
     occupancyGrid = undefined;
     remoteRobot.getHasBetaTeleopKit("getHasBetaTeleopKit");
@@ -268,22 +342,22 @@ function configureRemoteRobot() {
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
     remoteRobot.sensors.setFunctionProviderCallback(
-        buttonFunctionProvider.updateJointStates,
+        buttonFunctionProvider.updateJointStates
     );
     remoteRobot.sensors.setJointStateFunctionProviderCallback(
-        underVideoFunctionProvider.jointStateCallback,
+        underVideoFunctionProvider.jointStateCallback
     );
     remoteRobot.sensors.setBatteryFunctionProviderCallback(
-        batteryVoltageFunctionProvider.updateVoltage,
+        batteryVoltageFunctionProvider.updateVoltage
     );
     remoteRobot.sensors.setModeFunctionProviderCallback(
-        homeTheRobotFunctionProvider.updateModeState,
+        homeTheRobotFunctionProvider.updateModeState
     );
     remoteRobot.sensors.setIsHomedFunctionProviderCallback(
-        homeTheRobotFunctionProvider.updateIsHomedState,
+        homeTheRobotFunctionProvider.updateIsHomedState
     );
     remoteRobot.sensors.setRunStopFunctionProviderCallback(
-        runStopFunctionProvider.updateRunStopState,
+        runStopFunctionProvider.updateRunStopState
     );
 }
 
@@ -291,6 +365,10 @@ function configureRemoteRobot() {
 function configureMockRemoteRobot() {
     remoteRobot = new RemoteRobot({
         robotChannel: (message: cmd) => {
+            if (!controlEnabled) {
+                console.warn("Blocked mock command: this user is not active");
+                return;
+            }
             console.log("[mock robot command]", message);
             handleMockRobotCommand(message);
         },
@@ -301,22 +379,22 @@ function configureMockRemoteRobot() {
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
     remoteRobot.sensors.setFunctionProviderCallback(
-        buttonFunctionProvider.updateJointStates,
+        buttonFunctionProvider.updateJointStates
     );
     remoteRobot.sensors.setJointStateFunctionProviderCallback(
-        underVideoFunctionProvider.jointStateCallback,
+        underVideoFunctionProvider.jointStateCallback
     );
     remoteRobot.sensors.setBatteryFunctionProviderCallback(
-        batteryVoltageFunctionProvider.updateVoltage,
+        batteryVoltageFunctionProvider.updateVoltage
     );
     remoteRobot.sensors.setModeFunctionProviderCallback(
-        homeTheRobotFunctionProvider.updateModeState,
+        homeTheRobotFunctionProvider.updateModeState
     );
     remoteRobot.sensors.setIsHomedFunctionProviderCallback(
-        homeTheRobotFunctionProvider.updateIsHomedState,
+        homeTheRobotFunctionProvider.updateIsHomedState
     );
     remoteRobot.sensors.setRunStopFunctionProviderCallback(
-        runStopFunctionProvider.updateRunStopState,
+        runStopFunctionProvider.updateRunStopState
     );
 }
 
@@ -333,18 +411,14 @@ function initializeMockOperator() {
         remoteRobot.sensors.setMode("navigation");
         remoteRobot.sensors.setIsHomed(true);
         remoteRobot.sensors.setRunStopState(false);
-        remoteRobot.sensors.checkValidJointState(
-            createMockRobotPose(),
-            {},
-            {},
-        );
+        remoteRobot.sensors.checkValidJointState(createMockRobotPose(), {}, {});
     }, 250);
 }
 
 function addMockVideoStream(
     streamName: string,
     backgroundColor: string,
-    label: string,
+    label: string
 ) {
     const stream = createMockVideoStream(backgroundColor, label);
     const track = stream.getVideoTracks()[0];
@@ -353,7 +427,7 @@ function addMockVideoStream(
 
 function createMockVideoStream(
     backgroundColor: string,
-    label: string,
+    label: string
 ): MediaStream {
     const canvas = document.createElement("canvas");
     canvas.width = 640;
@@ -377,9 +451,11 @@ function createMockVideoStream(
     };
     draw();
 
-    return (canvas as HTMLCanvasElement & {
-        captureStream: (frameRate?: number) => MediaStream;
-    }).captureStream(15);
+    return (
+        canvas as HTMLCanvasElement & {
+            captureStream: (frameRate?: number) => MediaStream;
+        }
+    ).captureStream(15);
 }
 
 function createMockRobotPose(): RobotPose {
@@ -436,7 +512,7 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
             };
             return new FirebaseStorageHandler(
                 storageHandlerReadyCallback,
-                config,
+                config
             );
         default:
             return new LocalStorageHandler(storageHandlerReadyCallback);
@@ -451,31 +527,41 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
 function renderOperator(storageHandler: StorageHandler) {
     const url = new URL(window.location.href);
     const requestedLayoutInput = url.searchParams.get("view");
-    const customizationEnabled = url.searchParams.get("customization")?.toLowerCase() !== "false";
+    const customizationEnabled =
+        url.searchParams.get("customization")?.toLowerCase() !== "false";
     const requestedLayoutName = requestedLayoutInput?.replace(/-/g, " ");
     const requestedLayout = requestedLayoutName
-        ? storageHandler.loadLayout(requestedLayoutName) 
+        ? storageHandler.loadLayout(requestedLayoutName)
         : null;
-    const layout = requestedLayout || storageHandler.loadCurrentLayoutOrDefault();
+    const layout =
+        requestedLayout || storageHandler.loadCurrentLayoutOrDefault();
     FunctionProvider.initialize(DEFAULT_VELOCITY_SCALE, layout.actionMode);
 
+    const operator = !isMobile ? (
+        <Operator
+            remoteStreams={allRemoteStreams}
+            layout={layout}
+            storageHandler={storageHandler}
+            customizationEnabled={customizationEnabled}
+        />
+    ) : (
+        <MobileOperator
+            remoteStreams={allRemoteStreams}
+            storageHandler={storageHandler}
+        />
+    );
 
-
-    !isMobile
-        ? root.render(
-              <Operator
-                  remoteStreams={allRemoteStreams}
-                  layout={layout}
-                  storageHandler={storageHandler}
-                  customizationEnabled={customizationEnabled}
-              />,
-          )
-        : root.render(
-              <MobileOperator
-                  remoteStreams={allRemoteStreams}
-                  storageHandler={storageHandler}
-              />,
-          );
+    root.render(
+        <>
+            {!controlEnabled && <ControlAccessBanner lease={currentLease} />}
+            <div
+                aria-disabled={!controlEnabled}
+                className={!controlEnabled ? "control-access-disabled" : ""}
+            >
+                {operator}
+            </div>
+        </>
+    );
 
     if (!isMobile && !isMockOperator) {
         var loader = document.createElement("div");
@@ -500,6 +586,32 @@ function renderOperator(storageHandler: StorageHandler) {
                 window.document.body.removeChild(loader);
             }
         }, 1000);
+    }
+}
+
+function ControlAccessBanner(props: { lease: ControlLease }) {
+    const activeName = props.lease.activeUserName;
+    return (
+        <div
+            className="control-access-banner"
+            role="status"
+            aria-live="assertive"
+        >
+            <strong>Controls disabled.</strong>{" "}
+            {activeName
+                ? `${activeName} currently has control.`
+                : "Waiting for an administrator to activate you."}
+        </div>
+    );
+}
+
+function renderControlState() {
+    if (storageHandler) {
+        renderOperator(storageHandler);
+        return;
+    }
+    if (!controlEnabled) {
+        root.render(<ControlAccessBanner lease={currentLease} />);
     }
 }
 

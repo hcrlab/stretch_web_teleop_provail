@@ -1,6 +1,7 @@
 import { SignallingMessage } from "shared/util";
 import { BaseSignaling, SignalingProps } from "./Signaling";
 import io, { Socket } from "socket.io-client";
+import { currentAnonymousOperator } from "shared/local_control";
 
 export class LocalSignaling extends BaseSignaling {
     private socket: Socket;
@@ -16,6 +17,9 @@ export class LocalSignaling extends BaseSignaling {
             this.onSignal(signal);
         });
         this.socket.on("bye", () => {
+            this.onGoodbye();
+        });
+        this.socket.on("control_revoked", () => {
             this.onGoodbye();
         });
         this.socket.on("joined", () => {
@@ -43,12 +47,16 @@ export class LocalSignaling extends BaseSignaling {
 
     public join_as_operator(): Promise<boolean> {
         return new Promise<boolean>((resolve) => {
-            this.socket.emit("join_as_operator", (response) => {
-                if (response.success) {
-                    this.role = "operator";
+            this.socket.emit(
+                "join_as_operator",
+                currentAnonymousOperator(),
+                (response) => {
+                    if (response.success) {
+                        this.role = "operator";
+                    }
+                    resolve(response.success);
                 }
-                resolve(response.success);
-            });
+            );
         });
     }
 

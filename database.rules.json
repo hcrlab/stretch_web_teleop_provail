@@ -1,0 +1,51 @@
+{
+    "rules": {
+        ".read": false,
+        ".write": false,
+        "assignments": {
+            "$uid": {
+                ".read": "auth != null && (auth.uid === $uid || auth.token.admin === true)",
+                ".write": "auth != null && auth.token.admin === true"
+            }
+        },
+        "robots": {
+            "$robotUid": {
+                ".read": "auth != null",
+                ".write": "auth != null && (auth.uid === $robotUid || auth.token.admin === true)"
+            }
+        },
+        "operators": {
+            "$uid": {
+                ".read": "auth != null && (auth.uid === $uid || auth.token.admin === true)",
+                ".write": "auth != null && auth.uid === $uid"
+            }
+        },
+        "controlLeases": {
+            "$robotUid": {
+                ".read": "auth != null",
+                ".write": "auth != null && auth.token.admin === true",
+                ".validate": "newData.hasChildren(['generation', 'assignedAt', 'assignedBy']) && newData.child('generation').isNumber() && (!data.exists() || newData.child('generation').val() > data.child('generation').val())"
+            }
+        },
+        "presence": {
+            "$robotUid": {
+                ".read": "auth != null",
+                "$uid": {
+                    ".write": "auth != null && auth.uid === $uid",
+                    ".validate": "newData.hasChildren(['displayName', 'state', 'lastSeenAt']) && (newData.child('state').val() === 'online' || newData.child('state').val() === 'offline')"
+                }
+            }
+        },
+        "rooms": {
+            "$robotUid": {
+                ".read": "auth != null",
+                "robot": {
+                    ".write": "auth != null && auth.uid === $robotUid"
+                },
+                "operator": {
+                    ".write": "auth != null && (auth.uid === $robotUid || auth.token.admin === true || root.child('controlLeases').child($robotUid).child('activeUserUid').val() === auth.uid)"
+                }
+            }
+        }
+    }
+}

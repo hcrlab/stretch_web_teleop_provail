@@ -35,10 +35,9 @@
 }
 
 body {
-    font-family:
-        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-        "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-        sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+        "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
+        "Helvetica Neue", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: var(--background-color);
@@ -156,4 +155,25 @@ button .material-icons {
         padding: var(--btn-padding);
         gap: 10px;
     }
+}
+/* The command channel also enforces this state; this layer gives immediate,
+ * accessible feedback and prevents pointer interaction with controls. */
+.control-access-banner {
+    position: sticky;
+    top: 0;
+    z-index: 10000;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 1rem 1.25rem;
+    border-bottom: 3px solid #805b00;
+    background: #fff3bf;
+    color: #2f2500;
+    font-size: 1.1rem;
+    text-align: center;
+}
+
+.control-access-disabled {
+    pointer-events: none;
+    filter: grayscale(0.45);
+    opacity: 0.72;
 }

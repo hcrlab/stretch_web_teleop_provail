@@ -36,29 +36,12 @@ measurementId=T-6GMDF5W03Z
 
 ### Setup the Realtime Database
 
-Select the `Realtime Database` option under Build in the Firebase console for your project, then create a database. Select "Start in **locked mode**" in `Security Rules` and click `Enable`. Add the following to the database rules:
-
-```
-{
-    "rules": {
-        ".write": "auth.token.email == 'user1@example.com' || auth.token.email == 'user2@example.com'",
-        "users" : {
-	        "$user_id" : {
-            ".write": "$user_id === auth.uid",
-            ".read": "$user_id === auth.uid"
-          }
-        },
-        "layouts": {
-        	".read": "auth != null"
-        },
-        "currentLayouts": {
-        	".read": "auth != null"
-        }
-    }
-}
-```
-
-Replace `'user1@example.com'` and `'user2@example.com'` with the email addresses of the users you'd like to give write access to. You can add as many users as you'd like by separating them with `||`.
+Select the `Realtime Database` option under Build in the Firebase console, create
+a database in locked mode, and deploy the repository's `database.rules.json`.
+Those rules cover per-user layouts, signaling, waiting-user presence, and the
+admin-controlled robot lease. Do not add a root-level email-based `.write` rule;
+it would override the more restrictive lease rules. See `CONTROL_ADMIN_SETUP.md`
+for administrator custom-claim setup.
 
 ### Setup Authentication
 
